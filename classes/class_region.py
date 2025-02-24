@@ -2,15 +2,6 @@ from .class_province import Province
 from .class_settings import DreamAtlasSettings
 from . import *
 
-# Info to build UI dynamically [attribute, type, widget, label, options, active]
-UI_CONFIG_REGION = [
-    ['index', int, 0, 'Region Number', None, 0],
-    ['name', str, 0, 'Province Name', None, 1],
-    ['plane', int, 0, 'Plane', None, 0],
-    ['coordinates', list, 0, 'Coordinates', None, 0],
-    ['terrain_int', int, 0, 'Terrain Integer', None, 0]
-]
-
 
 class Region:
 
@@ -273,7 +264,7 @@ class ThroneRegion(Region):
             province.terrain_int = sum(terrain_set)
 
 
-class UnderwaterRegion(Region):
+class WaterRegion(Region):
 
     def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)

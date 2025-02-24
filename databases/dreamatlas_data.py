@@ -11,18 +11,17 @@ TERRAIN_PREFERENCES = [         # TERRAIN_PREF_XXXX = [plains, highlands, swamp,
     [3, 4, 1, 1, 2, 1],         # Mountains
     [3, 1, 1, 2, 1, 1],         # Desert
     [3, 1, 3, 0.5, 2, 1],       # Swamp
-    [3, 2, 1, 1, 2, 1]          # Karst
 ]
-TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MOUNTAINS, TERRAIN_PREF_DESERT, TERRAIN_PREF_SWAMP, TERRAIN_PREF_KARST = TERRAIN_PREFERENCES
+TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MOUNTAINS, TERRAIN_PREF_DESERT, TERRAIN_PREF_SWAMP = TERRAIN_PREFERENCES
 
 # Layout preference vector informs the land-sea split
 LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, extra provinces ratio]
-    [1, 1.0, 0.85],         # Land
+    [1, 1.0, 0.8],         # Land
     [1, 1.0, 1.0],          # Cave
-    [1, 0.8, 0.8],          # Coast
+    [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
     [0, 0.0, 0.8],          # Deeps
-    [0, 0.2, 0.8],          # Shallows
+    [0, 0.1, 0.8],          # Shallows
     [1, 0.7, 0.8]           # Lakes
 ]
 LAYOUT_PREF_LAND, LAYOUT_PREF_CAVE, LAYOUT_PREF_COAST, LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS, LAYOUT_PREF_LAKES = LAYOUT_PREFERENCES
@@ -64,7 +63,7 @@ HOMELANDS_INFO = [
     [29, TERRAIN_PREF_DESERT, LAYOUT_PREF_COAST, 0, 1],             # Berytos
     [30, TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST, 0, 1],           # Vanheim
     [31, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Helheim
-    [32, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 0, 1],               # Rus
+    [32, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 0, 1],              # Rus
     [33, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Niefelheim
     [34, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Muspelheim
     [40, TERRAIN_PREF_FOREST, LAYOUT_PREF_SHALLOWS, 4, 1],          # Pelagia
@@ -86,7 +85,7 @@ HOMELANDS_INFO = [
     [59, TERRAIN_PREF_BALANCED, LAYOUT_PREF_CAVE, 4096, 2],         # Agartha
     [60, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 0, 1],           # Ulm
     [61, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 0, 1],            # Marignon
-    [62, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 128, 1],             # Pyrene
+    [62, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 128, 1],         # Pyrene
     [63, TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND, 8392704, 2],      # Abysia
     [64, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],             # Ashdod
     [65, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],             # Naba
@@ -126,7 +125,7 @@ HOMELANDS_INFO = [
     [105, TERRAIN_PREF_PLAINS, LAYOUT_PREF_LAND, 0, 1],             # Ragha
     [106, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND, 8388608, 1],    # Caelum
     [107, TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND, 64, 1],            # Gath
-    [108, TERRAIN_PREF_KARST, LAYOUT_PREF_LAND, 128, 1],            # Patala
+    [108, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 128, 1],           # Patala
     [109, TERRAIN_PREF_PLAINS, LAYOUT_PREF_LAND, 0, 1],             # Tien Chi
     [110, TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_COAST, 0, 1],         # Jomon
     [111, TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND, 128, 1],           # Mictlan
@@ -152,13 +151,13 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_LAND],     # 2 MOUNTAINS
     [TERRAIN_PREF_DESERT, LAYOUT_PREF_LAND],        # 3 WASTES
     [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],        # 4 DEEPWOODS
-    [TERRAIN_PREF_KARST, LAYOUT_PREF_LAND],         # 5 OVERUNDER
+    [TERRAIN_PREF_FOREST, LAYOUT_PREF_LAND],         # 5 OVERUNDER
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_ISLAND],    # 6 ARCHIPELAGO
     [TERRAIN_PREF_SWAMP, LAYOUT_PREF_LAKES],        # 7 WETLANDS
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS],     # 8 SEABED
     [TERRAIN_PREF_MOUNTAINS, LAYOUT_PREF_DEEPS],    # 9 ABYSS
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_COAST],     # 10 DELTA
-    [TERRAIN_PREF_KARST, LAYOUT_PREF_DEEPS]         # 11 UNDERSEA
+    [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS]      # 11 UNDERSEA
 ]
 
 TERRAIN_2_HEIGHTS_DICT = {0: 0, 4: -600, 16: 200, 32: 50, 64: 300, 128: 90, 256: 250, 2048: -200, 4096: 1000, 8388608: 500, 68719476736: -100}
@@ -167,13 +166,6 @@ TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAI
 
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
 NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05, 0]
-
-# UI DATA
-########################################################################################################################
-
-ART_ICON = r'C:\Users\amyau\PycharmProjects\mapTlaloc\DreamAtlas\GUI\gui_art\DreamAtlasLogoSquare.png'
-UI_STATES = (ttk.DISABLED, ttk.NORMAL, ttk.HIDDEN)
-UI_CONNECTION_COLOURS = {0: 'black', 33: 'red', 2: 'blue', 4: 'grey', 8: 'green', 16: 'brown', 36: 'red', 3: 'pink'}  # [0, 'Standard border'], [33, 'Mountain pass'], [2, 'River border'], [4, 'Impassable'], [8, 'Road'], [16, 'River bridge'], [36, 'Impassable mountain'], [3, 'Waterfalls']
 
 # UNIVERSAL FUNCTIONS AND VARIABLES
 ########################################################################################################################

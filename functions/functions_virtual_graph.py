@@ -71,17 +71,21 @@ def make_virtual_graph(graph, coordinates, darts, mapsize):
     return virtual_graph, virtual_coordinates
 
 
-# def ui_find_virtual_graph(graph, coordinates, map_size, wraparound):
-#
-#     for i in graph:
-#         ix, iy = coordinates[i]
-#         for j in graph[i]:
-#             min_dist = np.inf
-#             best_dart = [0, 0]
-#             for n in wraparound:
-#                 jx, jy = np.add(coordinates[j], np.multiply(map_size, n))
-#                 new_dist = 1
-#                 if  < min_dist:
-#                     best_dart = n
-#
-#     return make_virtual_graph(graph, coordinates, darts, mapsize)
+def ui_find_virtual_graph(graph, coordinates, map_size, wraparound):
+
+    darts = dict()
+    for i in graph:
+        darts[i] = list()
+        ix, iy = coordinates[i]
+        for j in graph[i]:
+            min_dist = np.inf
+            best_dart = [0, 0]
+            for n in wraparound:
+                jx, jy = np.add(coordinates[j], np.multiply(map_size, n))
+                new_dist = np.linalg.norm([ix-jx, iy-jy])
+                if new_dist < min_dist:
+                    best_dart = n
+                    min_dist = new_dist
+            darts[i].append(best_dart)
+
+    return make_virtual_graph(graph, coordinates, darts, map_size)

@@ -14,6 +14,7 @@ import minorminer as mnm                    # Divest
 import tkinter.filedialog as tkf            # Critical
 import ttkbootstrap as ttk                  # Critical
 from ttkbootstrap.constants import *        # Critical
+from ttkbootstrap.tooltip import ToolTip    # Critical
 from numba import njit, prange              # Critical
 from copy import copy                       # Critical
 from PIL import ImageShow, ImageTk, Image   # Critical

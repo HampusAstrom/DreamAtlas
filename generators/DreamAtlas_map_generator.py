@@ -1,5 +1,4 @@
 from DreamAtlas import *
-from DreamAtlas.classes.class_region import HomelandRegion, PeripheryRegion, ThroneRegion, CaveRegion, BlockerRegion
 
 
 def generator_dreamatlas(settings: type(DreamAtlasSettings),
@@ -23,11 +22,13 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
 
     # Loading nations and making the nation -> graph dict
     generator_logging('Making nations...')
-    nation_list, players_teams = list(), list()
-    for nation_data in settings.nations:
+    nation_list = list()
+    for nation_data in settings.vanilla_nations:
         nation_list.append(Nation(nation_data))
     for custom_nation_data in settings.custom_nations:
         nation_list.append(CustomNation(custom_nation_data))
+    for generic_nation_data in settings.generic_nations:
+        nation_list.append(GenericNation(generic_nation_data))
 
     # Generate the player layout graph, determine the map size/region scale
     generator_logging('Making region layout...')
@@ -44,71 +45,37 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     map_class.scale[2] = map_class.map_size[2] * np.asarray([0.02, 0.02])
     map_class.planes = [1, 2]
 
-    cave_regions = int(0.05 * (len(nation_list) * settings.homeland_size + 0.5 * len(nation_list) * settings.player_neighbours * settings.periphery_size + settings.throne_sites))
-    blockers = int(np.sqrt(2500000 - cave_regions * 2 * 45000) / 15)
-
     layout = DominionsLayout(map_class)
-    layout.generate_region_layout(players_teams=settings.nations,
-                                  player_connections=settings.player_neighbours,
-                                  periphery_connections=2,
-                                  throne_regions=settings.throne_sites,
-                                  water_regions=0,
-                                  cave_regions=cave_regions,
-                                  vast_regions=0,
-                                  blocker_regions=blockers,
-                                  map_size=map_class.map_size[1],
-                                  seed=map_class.seed)
+    layout.generate_region_layout(settings=map_class.settings, map_size=map_class.map_size[1], seed=map_class.seed)
 
     # Assemble the regions and generate the initial province layout
     generator_logging('Making regions....')
-    
-    homeland_list = list()
-    periphery_list = list()
-    throne_list = list()
-    water_list = list()
-    caves_list = list()
-    vast_list = list()
-    blocker_list = list()
-    allowed_nations_list = list()
-    special_start_locations = list()
+
     province_index = [1 for _ in range(10)]
     province_list = [[] for _ in range(10)]
     terrain_list = [[] for _ in range(10)]
-
-    all_regions = list()
+    region_list = [[] for _ in range(7)]
 
     for i in layout.region_graph:  # Generate all the regions
 
         if layout.region_types[i] == 0:  # Generate the homelands
             nation = nation_list[i - 1]
             new_region = HomelandRegion(index=i, nation=nation, settings=settings, seed=seed)
-            homeland_list.append(new_region)
-            allowed_nations_list.append(nation.index)
-
         elif layout.region_types[i] == 1:  # Generate the peripherals
             nations = [nation_list[layout.region_graph[i][0] - 1], nation_list[layout.region_graph[i][1] - 1]]
             new_region = PeripheryRegion(index=i, nations=nations, settings=settings, seed=map_class.seed)
-            periphery_list.append(new_region)
-
         elif layout.region_types[i] == 2:  # Generate the thrones
             new_region = ThroneRegion(index=i, settings=map_class.settings, seed=map_class.seed)
-            throne_list.append(new_region)
-
         elif layout.region_types[i] == 3:  # Generate the water regions
-            x = 1
-
+            new_region = WaterRegion(index=i, settings=map_class.settings, seed=map_class.seed)
         elif layout.region_types[i] == 4:  # Generate the cave regions
             new_region = CaveRegion(index=i, settings=map_class.settings, seed=map_class.seed)
-            caves_list.append(new_region)
-
         elif layout.region_types[i] == 5:  # Generate the vast regions
-            x = 1
-
+            new_region = VastRegion(index=i, settings=map_class.settings, seed=map_class.seed)
         elif layout.region_types[i] == 6:  # Generate the blocker regions
             new_region = BlockerRegion(index=i, blocker=0, settings=map_class.settings, seed=map_class.seed)
-            blocker_list.append(new_region)
 
-        all_regions.append(new_region)
+        region_list[layout.region_types[i]].append(new_region)
         new_region.generate_graph()
         new_region.generate_terrain()
         new_region.generate_population()
@@ -119,21 +86,16 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             province_list[province.plane].append(province)
             province_index[province.plane] += 1
 
-    for region in homeland_list:  # Curse you Illwinterrr!!!!!!
+    special_start_locations = list()    # Generate the special start locations
+    for region in region_list[0]:
         for province in region.provinces:
             if province.capital_location:
                 special_start_index = province.index
-        if region.provinces[0].plane == 2:
-            special_start_index += len(province_list[1])
+                if region.plane == 2:   # Curse you Illwinterrr!!!!!!
+                    special_start_index += len(province_list[1])
         special_start_locations.append([region.nation.index, int(special_start_index)])
 
-    map_class.homeland_list = homeland_list
-    map_class.periphery_list = periphery_list
-    map_class.throne_list = throne_list
-    # water_list = list()
-    # caves_list = list()
-    # vast_list = list()
-    # blocker_list = list()
+    map_class.region_list = region_list
     map_class.province_list = province_list
 
     generator_logging('Map assembly....')
@@ -142,7 +104,7 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         layout.generate_province_layout(plane=plane)
         layout.generate_neighbours(plane=plane)
         layout.generate_special_neighbours(plane=plane)
-    layout.generate_gates(all_regions=all_regions)
+    layout.generate_gates(all_regions=region_list)
 
     # Check to add omni here
     if settings.omniscience:
@@ -158,10 +120,9 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             if not fail:
                 break
 
-        allowed_nations_list.append(499)
         special_start_locations.append([499, len(province_list[1]) + province.index])
         province.has_commands = True
-        province.terrain_int = 4096
+        province.terrain_int = 4 + 4096 + 67108864
         province.population = 10000
         province.size = 2
         province.shape = 3
@@ -171,7 +132,6 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
             terrain_list[plane].append([province.index, province.terrain_int])
             province.coordinates = layout.coordinates[plane][province.index]
 
-    map_class.allowed_nations_list = allowed_nations_list
     map_class.special_start_locations = special_start_locations
     map_class.terrain_list = terrain_list
     map_class.neighbour_list = layout.neighbours
@@ -203,6 +163,12 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
         map_class.height_map[plane] = np.vectorize(lambda i: height_dict[i])(map_class.pixel_map[plane])
 
     map_class.layout = layout
+
+    # for plane in map_class.planes:
+    #     for province in map_class.province_list[plane]:
+    #         string = ''
+    #         for i in terrain_int2list(province.terrain_int):
+    #             string += TERRAIN_DATA[int()]
 
     generator_logging('DreamAtlas generation complete!')
     if ui is not None:

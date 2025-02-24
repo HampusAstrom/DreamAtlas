@@ -6,13 +6,127 @@ from . import *
 
 class DominionsMap:
 
+    """
+    A class to represent a map in the Dominions game.
+
+    Attributes
+    ----------
+    settings : None
+        Placeholder for settings.
+    homeland_list : list
+        List of homelands.
+    periphery_list : list
+        List of peripheries.
+    throne_list : list
+        List of thrones.
+    province_list : list
+        List of provinces for each plane.
+    armies_list : list
+        List of armies for each plane.
+    pretenders_list : list
+        List of pretenders for each plane.
+    map_title : str
+        Title of the map.
+    image_file : list
+        List of image files for each plane.
+    image_pil : list
+        List of PIL images for each plane.
+    map_size : list
+        List of map sizes for each plane.
+    scale : list
+        List of scales for each plane.
+    planes : set
+        Set of planes.
+    dom_version : str
+        Version of Dominions.
+    scenario : bool
+        Indicates if the map is a scenario.
+    description : str
+        Description of the map.
+    neighbour_list : list
+        List of neighbours for each plane.
+    special_neighbour_list : list
+        List of special neighbours for each plane.
+    pixel_owner_list : list
+        List of pixel owners for each plane.
+    province_names_list : list
+        List of province names for each plane.
+    terrain_list : list
+        List of terrains for each plane.
+    population_list : list
+        List of populations for each plane.
+    gate_list : list
+        List of gates for each plane.
+    map_text_colour : list
+        List of map text colours.
+    map_dom_colour : list
+        List of map dominion colours.
+    max_sail_distance : list
+        List of maximum sail distances for each plane.
+    magic_sites : list
+        List of magic sites for each plane.
+    capital_names : bool
+        Indicates if capital names are used.
+    allowed_nations_list : list
+        List of allowed nations.
+    computer_player_list : list
+        List of computer players.
+    ai_allies_list : list
+        List of AI allies.
+    victory_type : list
+        List of victory types.
+    cannot_win_list : list
+        List of provinces that cannot win.
+    victory_point_provinces : list
+        List of victory point provinces for each plane.
+    start_locations : list
+        List of start locations for each plane.
+    no_start_locations : list
+        List of no start locations for each plane.
+    special_start_locations : list
+        List of special start locations for each plane.
+    team_start_locations : list
+        List of team start locations for each plane.
+    seed : int
+        Seed for random generation.
+    layout : None
+        Placeholder for layout.
+    pixel_map : list
+        List of pixel maps for each plane.
+    height_map : list
+        List of height maps for each plane.
+    min_dist : list
+        List of minimum distances for each plane.
+    province_capital_locations : list
+        List of province capital locations for each plane.
+
+    Methods
+    -------
+    __init__():
+        Initializes the map with default values.
+    load_file(filepath, plane=1):
+        Loads a map file.
+    fill_dreamatlas(plane_image_types):
+        Fills the map with DreamAtlas data.
+    load_folder(folderpath):
+        Loads all map files from a folder.
+    make_map_file(plane, filepath):
+        Creates a .map file.
+    make_d6m(plane, filepath):
+        Creates a .d6m file.
+    publish(location=None, name=None, art_style=0):
+        Publishes the map.
+    plot():
+        Plots the map.
+    __str__():
+        Returns a string representation of the map.
+    """
+
     def __init__(self):  # Map classes always initialise empty to be filled in later
 
         # DreamAtlas required data
         self.settings = None
-        self.homeland_list = list()
-        self.periphery_list = list()
-        self.throne_list = list()
+        self.region_list = [[] for _ in range(7)]
         self.province_list = [[] for _ in range(10)]
         self.armies_list = [[] for _ in range(10)]
         self.pretenders_list = [[] for _ in range(10)]
@@ -100,6 +214,8 @@ class DominionsMap:
                             self.neighbour_list[plane].append([int(line[1]), int(line[2])])
                         elif line[0] == '#neighbourspec':
                             self.special_neighbour_list[plane].append([int(line[1]), int(line[2]), int(line[3])])
+                        elif line[0] == '#gate':
+                            self.gate_list[plane].append([int(line[1]), int(line[2])])
                         elif line[0] == '#pb':
                             self.pixel_owner_list[plane].append([int(line[1]), int(line[2]), int(line[3]), int(line[4])])
                         elif line[0] == '#landname':
@@ -195,12 +311,15 @@ class DominionsMap:
         for plane in self.planes:
             self.province_list[plane] = list()
 
+            height_dict = dict()
             for i, terrain_int in self.terrain_list[plane]:
                 new_province = Province(index=i, terrain_int=terrain_int, parent_region=1)
                 self.province_list[plane].append(new_province)
                 self.layout.graph[plane][i] = list()
                 self.layout.darts[plane][i] = list()
-
+                height_dict[i] = 0
+                if has_terrain(terrain_int, 4) or has_terrain(terrain_int, 68719476736):
+                    height_dict[i] = -100
                 for j, population in self.population_list[plane]:
                     if i == j:
                         self.province_list[plane][-1].population = population
@@ -209,8 +328,6 @@ class DominionsMap:
                 self.layout.neighbours[plane].append([i, j])
                 self.layout.graph[plane][i].append(j)
                 self.layout.darts[plane][i].append([0, 0])
-                self.layout.graph[plane][j].append(i)
-                self.layout.darts[plane][j].append([0, 0])
 
             for (i, j, c) in self.special_neighbour_list[plane]:
                 self.layout.special_neighbours[plane].append([i, j, c])
@@ -229,14 +346,11 @@ class DominionsMap:
 
             elif plane_image_types[plane] == '.tga':
 
-                height_dict = {67: 0}
-                for province in self.province_list[plane]:
-                    height_dict[province.index] = 0
-                    if has_terrain(province.terrain_int, 4):
-                        height_dict[province.index] = -100
-                    province.height = height_dict[province.index]
-
-                self.height_map[plane] = np.zeros(self.map_size[plane], dtype=np.int16)
+                # for province in self.province_list[plane]:
+                #     height_dict[province.index] = 0
+                #     if has_terrain(province.terrain_int, 4):
+                #         height_dict[province.index] = -100
+                #     province.height = height_dict[province.index]
 
                 all_capital_locations = list()
                 pixels = self.image_pil[plane].load()
@@ -253,7 +367,8 @@ class DominionsMap:
                         if province.index == i:
                             province.coordinates = [x, y]
 
-                self.min_dist[plane] = 50
+                self.height_map[plane] = np.vectorize(lambda i: height_dict[i])(self.pixel_map[plane])
+                self.min_dist[plane] = 100
 
     def load_folder(self, folderpath: str):
         plane_image_types = [None for _ in range(10)]
@@ -266,8 +381,10 @@ class DominionsMap:
                             if file[0:-4].endswith('_plane%i' % i):
                                 plane = i
                         self.planes.add(plane)
-                        plane_image_types[plane] = file[-4:]
                         self.load_file(os.path.join(dirpath, file), plane=plane)
+
+                        if file[-4:] in ['.d6m', '.tga']:
+                            plane_image_types[plane] = file[-4:]
 
         self.fill_dreamatlas(plane_image_types=plane_image_types)
 
@@ -277,7 +394,7 @@ class DominionsMap:
 
             f.write('--This map file was made using DreamAtlas\n\n')
             f.write('--General Map Information\n')
-            f.write('#dom2title %s\n' % self.map_title[plane])
+            f.write('#dom2title %s\n' % self.map_title)
             f.write('#imagefile %s\n' % self.image_file[plane])
             # f.write('#winterimagefile %s\n' % self.winter_image_file[plane])
             f.write('#mapsize %s %s\n' % (self.map_size[plane][0], self.map_size[plane][1]))
@@ -305,9 +422,9 @@ class DominionsMap:
 
             # Nation info
             f.write('\n--Nation info\n')
-            if len(self.allowed_nations_list) != 0:
-                for entry in range(len(self.allowed_nations_list)):
-                    f.write('#allowedplayer %s\n' % self.allowed_nations_list[entry])
+            # if len(self.allowed_nations_list) != 0:
+            #     for entry in range(len(self.allowed_nations_list)):
+            #         f.write('#allowedplayer %s\n' % self.allowed_nations_list[entry])
             if len(self.computer_player_list) != 0:
                 for entry in range(len(self.computer_player_list)):
                     f.write('#computerplayer ' + ' '.join(map(str, self.computer_player_list[entry])) + '\n')

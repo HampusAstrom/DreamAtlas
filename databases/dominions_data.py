@@ -7,14 +7,15 @@ TERRAIN_DATA = [
     [15, 32768, 'Water sites'], [16, 65536, 'Earth sites'], [17, 131072, 'Astral sites'],
     [18, 262144, 'Death sites'], [19, 524288, 'Nature sites'], [20, 1048576, 'Glamour sites'],
     [21, 2097152, 'Blood sites'], [22, 4194304, 'Holy Sites'], [23, 8388608, 'Mountains'],
-    [25, 33554432, 'Good throne location'], [26, 67108864, 'Good start location'],
-    [27, 134217728, 'Bad throne location'],
+    [25, 33554432, 'Good throne location'], [26, 67108864, 'Good start location'], [27, 134217728, 'Bad throne location'],
+    # 28 29
     [30, 1073741824, 'Warmer'], [31, 2147483648, 'Colder'], [32, 4294967296, 'Invisible'], [33, 8589934592, 'Vast'],
     [34, 17179869184, 'Infernal waste'], [35, 34359738368, 'Void'], [36, 68719476736, 'Cave wall'],
     [37, 137438953472, 'Has gate'], [38, 274877906944, 'Flooded'], [39, 549755813888, 'Attackers rout once'],
     # [40, 1099511627776, 'No effect'],
     # [41, 2199023255552, 'No effect'],
-    [59, 576460752303423488, 'Cave wall effect'], [60, 1152921504606846976, 'Draw as UW']
+    [59, 576460752303423488, 'Cave wall effect/draw as cave'], [60, 1152921504606846976, 'Draw as UW']
+    # 61, 62, 63, 64 worth checking, unlikely to go beyond 64
 ]
 
 EA_NATIONS = [
@@ -70,8 +71,8 @@ OTHER_NATIONS = [
     [4, 'Roaming Independents', 'e.g. Barbarians']
 ]
 
+ALL_NATIONS = EA_NATIONS + MA_NATIONS + LA_NATIONS
 AGE_NATIONS = [EA_NATIONS, MA_NATIONS, LA_NATIONS]
-ALL_NATIONS = OTHER_NATIONS + EA_NATIONS + MA_NATIONS + LA_NATIONS
 
 VICTORY_CONDITIONS = [
     [0, 'Standard', 'Nothing'], [2, 'Dominion', 'Dominion score req.'],

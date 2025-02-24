@@ -31,30 +31,10 @@ class Nation:
         return string
 
 
-# Info to build UI dynamically frames, buttons, [attribute, type, widget, label, options]
-UI_CONFIG_CUSTOMNATION = {
-    'label_frames': [
-        ['Nation info', 0],
-        ['Homeland info', 1]],
-    'buttons': [1, 5, 6],
-    'attributes': {
-        'index': [int, 0, 'Nation Number', None, 1],
-        'team': [int, 0, 'Team', None, 1],
-        'name': [str, 0, 'Name', None, 1],
-        'tagline': [str, 0, 'Tagline', None, 1],
-        'cap_terrain': [int, 0, 'Capital Terrain', None, 1],
-
-        'terrain_profile': [int, 1, 'Terrain Preference', ['Balanced', 'Plains', 'Forest', 'Mountains', 'Desert', 'Swamp', 'Karst'], 1],
-        'layout': [int, 1, 'Layout', ['Land', 'Cave', 'Coast', 'Island', 'Deeps', 'Shallows', 'Lakes'], 1],
-        'home_plane': [int, 1, 'Home Plane', ['Surface', 'Underground'], 1]
-    }
-}
-
-
 class CustomNation:
 
     def __init__(self, custom_nation_data):
-        self.index, self.name, self.tagline, terrain_index, layout_index, self.cap_terrain, self.home_plane, self.team = custom_nation_data
+        self.index, self.name, self.tagline, self.terrain, terrain_index, layout_index, self.home_plane, self.team = custom_nation_data
         self.terrain_profile = TERRAIN_PREFERENCES[terrain_index]
         self.layout = LAYOUT_PREFERENCES[layout_index]
 
@@ -67,23 +47,10 @@ class CustomNation:
         return string
 
 
-# Info to build UI dynamically frames, buttons, [attribute, type, widget, label, options]
-UI_CONFIG_GENERICNATION = {
-    'label_frames': [
-        ['Info', 1]],
-    'buttons': [1, 5, 6],
-    'attributes': {
-        'terrain_profile': [int, 1, 'Terrain Preference', ['Balanced', 'Plains', 'Forest', 'Mountains', 'Desert', 'Swamp', 'Karst'], 1],
-        'layout': [int, 1, 'Layout', ['Land', 'Cave', 'Coast', 'Island', 'Deeps', 'Shallows', 'Lakes'], 1],
-        'home_plane': [int, 1, 'Home Plane', ['Surface', 'Underground'], 1]
-    }
-}
-
-
 class GenericNation:
 
     def __init__(self, generic_nation_data):
-        terrain_index, layout_index, self.cap_terrain, self.home_plane = generic_nation_data
+        self.terrain, terrain_index, layout_index, self.home_plane, self.team = generic_nation_data
         self.terrain_profile = TERRAIN_PREFERENCES[terrain_index]
         self.layout = LAYOUT_PREFERENCES[layout_index]
 

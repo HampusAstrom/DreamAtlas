@@ -1,15 +1,5 @@
 from . import *
 
-# Info to build UI dynamically [attribute, type, widget, label, options, active]
-UI_CONFIG_CONNECTION = {
-    'label_frames': [['Connected Provinces', 0], ['Connection Type', 0]],
-    'buttons': [0, 5],
-    'attributes': {
-        'connected_provinces': [tuple[int, int], 0, 'Connected Provinces', None, 0],
-        'connection_int': [int, 6, 'Connection Type', None, 1]
-    }
-}
-
 
 class Connection:
 
