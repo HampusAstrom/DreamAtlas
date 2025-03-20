@@ -177,5 +177,4 @@ def generator_dreamatlas(settings: type(DreamAtlasSettings),
     generator_logging('DreamAtlas generation complete!')
     if ui is not None:
         ui.progress_bar.stop()
-
     return map_class

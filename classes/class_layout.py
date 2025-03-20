@@ -229,7 +229,7 @@ class DominionsLayout:
                         self.special_neighbours[plane].append([i, j, 4])
                         fail = True
                     elif type(i_j_provs[index].parent_region) is BlockerRegion:  # if blocker
-                        self.special_neighbours[plane].append([i, j, 4])
+                        self.special_neighbours[plane].append([i, j, 36])
                         fail = True
                     elif (choice == 33 or choice == 36) and not has_terrain(ti, 8388608):
                         i_j_provs[index].terrain_int += 8388608

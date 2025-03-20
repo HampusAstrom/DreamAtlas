@@ -65,6 +65,7 @@ class Region:
 
             if province.plane == 2:
                 terrain_set.add(4096)  # Cave layer
+                terrain_set.add(576460752303423488)
 
             if i == 0:  # Anchor province
                 if self.layout[0] == 0:
