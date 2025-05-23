@@ -76,7 +76,15 @@ def generator_geography(map_class, seed=None):
         flow_map, filled_map = _numba_flow_map(height_map, min_seeds, iterations=1000)
 
         height_maps[plane] = height_map
-        pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates, map_class.map_size[plane], shapes, hwrap=True, vwrap=True, scale_down=8)
+
+        # Use height map to pixel map coasts and borders and return both
+        pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates,
+                                                 map_class.map_size[plane],
+                                                 height_map,
+                                                 shapes,
+                                                 hwrap=True,
+                                                 vwrap=True,
+                                                 scale_down=4)
 
     return height_maps, pixel_maps
 

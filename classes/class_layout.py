@@ -187,6 +187,8 @@ class DominionsLayout:
 
         self.province_graphs[plane].make_delaunay_graph()
         self.province_graphs[plane].spring_adjustment()
+        self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
+        self.province_graphs[plane].clean_delaunay_graph()  # Runs a second pass just in case
 
     def generate_neighbours(self, plane: int):
 

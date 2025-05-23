@@ -8,6 +8,10 @@ from numba.experimental import jitclass
 from DreamAtlas.databases import NEIGHBOURS_FULL
 
 
+def less_first(a, b):
+    return [a, b] if a < b else [b, a]
+
+
 @njit(cache=True)
 def _numba_norm(v):
     return np.sqrt(abs(v[0]) * abs(v[0]) + abs(v[1]) * abs(v[1]))
@@ -134,6 +138,7 @@ class DreamAtlasGraph:
         self.map_size = map_size
         self.wraparound = wraparound
 
+        self.types = np.zeros(size, dtype=np.int8)
         self.plot_colour = ['r*' for _ in range(size)]  # Exclusively for plotting purposes
 
     def get_node_connections(self, i):
@@ -147,6 +152,9 @@ class DreamAtlasGraph:
 
     def get_length(self, i, j):
         return np.linalg.norm(self.get_vector(i, j))
+
+    def get_unit_vector(self, i, j):
+        return self.get_vector(i, j) / self.get_length(i, j)
 
     def get_min_dist(self):
         min_dist = np.inf
@@ -362,9 +370,6 @@ class DreamAtlasGraph:
 
     def make_delaunay_graph(self, planes=[1, 2]):
 
-        def less_first(a, b):
-            return [a, b] if a < b else [b, a]
-
         points, key_list, counter = list(), dict(), 0
         for i in range(self.size):  # Set up the virtual points on the toroidal plane
             if self.planes[i] in planes:
@@ -396,6 +401,23 @@ class DreamAtlasGraph:
                         dart[axis] = 1
                 self.darts[i, j] = dart
                 self.darts[j, i] = -dart
+
+    def clean_delaunay_graph(self):
+
+        for i, j in self.get_all_connections():  # First make the set of all double-triangle quads
+
+            if self.types[i] == 1 and self.types[j] == 1:  # If this is a cap/cap-circle edge ignore it
+                continue
+
+            k, l = np.argwhere(self.get_node_connections(i) and self.get_node_connections(j))  # Find the 2 shared nodes and add them
+
+            alpha = np.arccos(np.dot(self.get_unit_vector(i, k), self.get_unit_vector(j, k)))
+            gamma = np.arccos(np.dot(self.get_unit_vector(i, l), self.get_unit_vector(j, l)))
+
+            if alpha + gamma > 180:  # If they do not, swap the edge correctly
+                self.disconnect_nodes(i, j)
+                self.connect_nodes(k, l)
+                print(f"Swapped {i}-{j} for {k}-{l}")
 
     def spring_adjustment(self, iterations=None, ratios=None):
         if ratios is None:

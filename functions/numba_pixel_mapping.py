@@ -7,6 +7,11 @@ def minkowski(v, p, ip):
     return (abs(v[0]) ** p + abs(v[1]) ** p) ** ip
 
 
+@njit(fastmath=True, cache=True)
+def height_minkowski(v, p, ip):
+    return (abs(v[0]) ** p + abs(v[1]) ** p + abs(v[2]) ** p) ** ip
+
+
 @njit(parallel=True, cache=True, fastmath=True)
 def _jump_flood_algorithm(pixel_matrix: np.array,
                           step_size: int,
