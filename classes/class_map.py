@@ -352,7 +352,7 @@ class DominionsMap:
                 for x in range(self.map_size[plane][0]):
                     for y in range(self.map_size[plane][1]):
                         yr = self.map_size[plane][1]-y-1
-                        if pixels[x, y] == (255, 255, 255):
+                        if pixels[x, y][0:3] == (255, 255, 255):
                             all_capital_locations.append((x, yr))
 
                 for x, y in all_capital_locations:

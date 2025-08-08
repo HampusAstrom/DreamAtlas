@@ -70,12 +70,8 @@ class DominionsLayout:
 
         self.region_graph.embed_graph(initial_graph, seed)
         self.region_graph.spring_adjustment()
-
-        # homeland_coords = self.region_graph.coordinates[0:len(nation_list)]
-        # codebook, distortion = sccvq.kmeans(obs=np.array(homeland_coords, dtype=np.float32), k_or_guess=len(teams))
-        # code, distortion = sccvq.vq(homeland_coords, codebook)
-        # print(code)
-        # for j in code:
+        if settings.disciples:
+            self.region_graph.embed_disciples(teams, seed)  # Embed disciples into the graph
 
         # Add Peripheral regions
         done_edges = set()
@@ -154,25 +150,33 @@ class DominionsLayout:
                 self.region_types[r] = 6
                 r += 1
 
-        self.region_graph.make_delaunay_graph(planes=[2])  # Adding cave walls
-        faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
-        for i, j in self.region_graph.get_all_connections():
-            if self.region_planes[i] == 2 and self.region_planes[j] == 2:
-                self.region_graph.insert_connection(i, j, r)
-                self.region_planes[r] = 2
-                self.region_graph.planes[r] = self.region_planes[r]
-                self.region_types[r] = 8
-                r += 1
+        self.region_graph.spring_adjustment()
+        edges, coordinates, darts = self.region_graph.get_small_delaunay(planes=[2])
+        for i, edge in enumerate(edges):
+            self.region_graph.graph[edge[0], edge[1]] = 0
+            self.region_graph.graph[edge[1], edge[0]] = 0
+            self.region_graph.graph[edge[0], r] = 1
+            self.region_graph.graph[edge[1], r] = 1
+            self.region_graph.graph[r, edge[1]] = 1
+            self.region_graph.graph[r, edge[0]] = 1
+            self.region_graph.coordinates[r] = coordinates[i]
+            self.region_graph.darts[edge[0], r] = -darts[i][0]
+            self.region_graph.darts[edge[1], r] = -darts[i][1]
+            self.region_graph.darts[r, edge[1]] = darts[i][1]
+            self.region_graph.darts[r, edge[0]] = darts[i][0]
 
+            self.region_planes[r] = 2
+            self.region_graph.planes[r] = self.region_planes[r]
+            self.region_types[r] = 8
+            r += 1
+
+        faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
             self.region_graph.insert_face(face, r, centroids[i])
             self.region_planes[r] = 2
             self.region_graph.planes[r] = self.region_planes[r]
             self.region_types[r] = 8
             r += 1
-
-        # Final Adjustment
-        self.region_graph.spring_adjustment()
 
     def generate_province_layout(self,
                                  province_list,
@@ -183,10 +187,14 @@ class DominionsLayout:
         self.province_graphs[plane] = DreamAtlasGraph(len(province_list), map_size=self.map_size[plane], wraparound=self.wraparound)
         for i, province in enumerate(province_list):
             self.province_graphs[plane].coordinates[i] = province.coordinates
+
+            if province.capital_location or province.capital_circle:
+                self.province_graphs[plane].types[i] = 1
             # self.province_graphs[plane].weights[i] = province.size
 
         self.province_graphs[plane].make_delaunay_graph()
         self.province_graphs[plane].spring_adjustment()
+        self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
 
     def generate_neighbours(self, plane: int):
 

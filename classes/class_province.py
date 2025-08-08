@@ -42,6 +42,7 @@ class Province:
         self.terrain_int = terrain_int
         self.has_gate = False
         self.capital_location = capital_location
+        self.capital_circle = False
         self.capital_nation = capital_nation
         self.parent_region = parent_region
 
