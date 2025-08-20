@@ -22,9 +22,9 @@ LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, 
     [1, 1.0, 1.0],          # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
-    [0, 0.0, 0.8],          # Deeps
-    [0, 0.1, 0.8],          # Shallows
-    [1, 0.9, 0.7]           # Lakes
+    [0, 0.0, 0.0],          # Deeps
+    [0, 0.1, 0.6],          # Shallows
+    [1, 0.9, 0.5]           # Lakes
 ]
 LAYOUT_PREF_LAND, LAYOUT_PREF_CAVE, LAYOUT_PREF_COAST, LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS, LAYOUT_PREF_LAKES = LAYOUT_PREFERENCES
 
