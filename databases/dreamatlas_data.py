@@ -48,7 +48,7 @@ REGION_VAST_INFO = [17179869184, 17179869184, 17179869184, 17179869184, 17179869
 # Blocker vector informs how different blockers are created
 REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
     6: [1, 16 + 8388608 + 68719476736 + 549755813888, 3, 2],    # Mountain Range
-    8: [2, 4 + 4096 + 68719476736 + 576460752303423488, 4, 3]       # Cave Wall
+    8: [2, 4096 + 68719476736 + 576460752303423488, 4, 3]       # Cave Wall
 }
 
 HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
@@ -182,7 +182,7 @@ TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1
 TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
 
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
-NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
+NEIGHBOUR_SPECIAL_WEIGHTS = [0.7, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
 
 COLOURS_PROVINCES = mpl.colormaps['gist_stern']
 COLOURS_REGIONS = mpl.colormaps['tab20']

@@ -1,3 +1,5 @@
+import cProfile
+
 from DreamAtlas import *
 from .DreamAtlas_geo_generator import simplex_generator_geography
 

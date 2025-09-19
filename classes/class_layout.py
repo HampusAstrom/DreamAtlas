@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 from . import *
 
@@ -67,10 +68,33 @@ class DominionsLayout:
         for i in range(len(nation_list)):
             weights[i] = 1
 
-        self.region_graph.embed_graph(initial_graph, seed)
-        self.region_graph.spring_adjustment()
-        if settings.disciples:
-            self.region_graph.embed_disciples(teams, seed)  # Embed disciples into the graph
+        attempt = 0
+        allowed_attempts = 30
+        while attempt < allowed_attempts:
+            self.region_graph.embed_graph(initial_graph, seed)
+            if settings.disciples:
+                self.region_graph.embed_disciples(teams, seed)  # Embed disciples into the graph
+
+            failed = False
+            for axis in range(2):
+                nonzero_darts = np.transpose(np.nonzero(self.region_graph.darts[:, :, axis]))
+                if len(nonzero_darts) == 0:
+                    failed = True
+
+            if not failed:
+                break
+            print(f"Embedding Error: Concave embedding with seed {seed} on attempt {attempt}")
+            attempt += 1
+            seed = rd.randint(0, 1000)
+
+        if attempt == allowed_attempts:
+            raise Exception("DreamAtlas Error: Failed to embed region graph after 10 attempts")
+        elif attempt > 1:
+            print(f"Successful embedding with seed {seed} on attempt {attempt}")
+
+        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 200), dtype=np.float32), iterations=3000)
+        # self.plot()
+        # plt.show()
 
         # Add Peripheral regions
         done_edges = set()
@@ -149,7 +173,6 @@ class DominionsLayout:
                 self.region_types[r] = 6
                 r += 1
 
-        self.region_graph.spring_adjustment()
         edges, coordinates, darts = self.region_graph.get_small_delaunay(planes=[2])
         for i, edge in enumerate(edges):
             self.region_graph.graph[edge[0], edge[1]] = 0
@@ -169,6 +192,7 @@ class DominionsLayout:
             self.region_types[r] = 8
             r += 1
 
+        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
         faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
             self.region_graph.insert_face(face, r, centroids[i])
@@ -192,6 +216,7 @@ class DominionsLayout:
             # self.province_graphs[plane].weights[i] = province.size
 
         self.province_graphs[plane].make_delaunay_graph()
+        self.province_graphs[plane].lloyd_relaxation(iterations=3)
         self.province_graphs[plane].spring_adjustment()
         self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
 
@@ -226,6 +251,11 @@ class DominionsLayout:
                         choice = 0
                         break
                     elif has_terrain(terrain, 4096):
+                        choice = 0
+                        break
+
+                for dart in self.province_graphs[plane].darts[i, j]:
+                    if dart != 0:
                         choice = 0
                         break
 

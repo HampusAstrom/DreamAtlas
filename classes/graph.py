@@ -5,6 +5,7 @@ import networkx as ntx
 import random as rd
 from numba import njit, prange
 from DreamAtlas.databases import NEIGHBOURS_FULL
+from DreamAtlas.functions import LloydRelaxation
 
 
 def less_first(a, b):
@@ -286,6 +287,9 @@ class DreamAtlasGraph:
 
     def embed_graph(self, s_graph, seed: int):
 
+        self.coordinates = np.zeros((self.size, 2), dtype=np.int32)
+        self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)
+
         # Set the graph size to embed (smaller is faster)
         scale_down = 100
         size = np.array(self.map_size / scale_down, dtype=np.uint32)
@@ -406,6 +410,9 @@ class DreamAtlasGraph:
 
     def make_delaunay_graph(self, planes=[1, 2]):
 
+        self.graph = np.zeros((self.size, self.size), dtype=np.bool_)
+        self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)
+
         points, key_list, counter = list(), dict(), 0
         for i in range(self.size):  # Set up the virtual points on the toroidal plane
             if self.planes[i] in planes:
@@ -503,6 +510,22 @@ class DreamAtlasGraph:
             dart = self.get_closest_dart(k, l)
             self.darts[k, l] = dart
             self.darts[l, k] = -dart
+
+        # faces, centroids = self.get_faces_centroids()
+        # for i, face in enumerate(faces):
+        #     if len(face) == 4:
+        #         j, k = face[0], face[2]
+        #         self.connect_nodes(j, k)
+        #         dart = self.get_closest_dart(j, k)
+        #         self.darts[j, k] = dart
+        #         self.darts[k, j] = -dart
+
+    def lloyd_relaxation(self, iterations=1):
+
+        lloyd = LloydRelaxation(self.coordinates)
+        for _ in range(iterations):
+            lloyd.relax()
+        self.coordinates = lloyd.get_points()
 
     def spring_adjustment(self, iterations=None, ratios=None):
         if ratios is None:
