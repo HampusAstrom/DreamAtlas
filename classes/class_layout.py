@@ -88,7 +88,7 @@ class DominionsLayout:
             seed = rd.randint(0, 1000)
 
         if attempt == allowed_attempts:
-            raise Exception("DreamAtlas Error: Failed to embed region graph after 10 attempts")
+            raise Exception("DreamAtlas Error: Failed to embed region graph after 30 attempts")
         elif attempt > 1:
             print(f"Successful embedding with seed {seed} on attempt {attempt}")
 
@@ -192,6 +192,7 @@ class DominionsLayout:
             self.region_types[r] = 8
             r += 1
 
+        self.region_graph.lloyd_relaxation(iterations=3)
         self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
         faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
@@ -216,9 +217,10 @@ class DominionsLayout:
             # self.province_graphs[plane].weights[i] = province.size
 
         self.province_graphs[plane].make_delaunay_graph()
-        self.province_graphs[plane].lloyd_relaxation(iterations=3)
+        self.province_graphs[plane].lloyd_relaxation(iterations=2)
         self.province_graphs[plane].spring_adjustment()
         self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
+        # print(len(self.province_graphs[plane].get_all_connections()))
 
     def generate_connections(self,
                                     plane: int,

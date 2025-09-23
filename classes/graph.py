@@ -160,6 +160,9 @@ class DreamAtlasGraph:
     def get_unit_vector(self, i, j):
         return self.get_vector(i, j) / self.get_length(i, j)
 
+    def get_raw_dist(self, i, j):
+        return np.linalg.norm(self.coordinates[j] - self.coordinates[i])
+
     def get_min_dist(self):
         min_dist = np.inf
         for i, j in self.get_all_connections():
@@ -170,18 +173,14 @@ class DreamAtlasGraph:
 
     def get_closest_dart(self, i, j):  # Returns the shortest dart from i to j
 
+        dart = np.zeros(2, dtype=np.int8)
         min_dist = np.inf
         for n in NEIGHBOURS_FULL:
             v_vector = self.coordinates[j] + n * self.map_size - self.coordinates[i]
             dist = np.linalg.norm(v_vector)
             if dist < min_dist:
                 min_dist = dist
-                vector = v_vector
-
-        dart = np.zeros(2, dtype=np.int8)
-        for axis in [0, 1]:
-            if not (0 <= self.coordinates[i][axis] + vector[axis] < self.map_size[axis]):
-                dart[axis] = np.sign(self.coordinates[i][axis] + vector[axis])
+                dart = n
 
         return dart
 
@@ -194,7 +193,7 @@ class DreamAtlasGraph:
         self.graph[i, j] = 0
         self.graph[j, i] = 0
         self.darts[i, j] = np.zeros(2, dtype=np.int8)
-        self.darts[i, j] = np.zeros(2, dtype=np.int8)
+        self.darts[j, i] = np.zeros(2, dtype=np.int8)
 
     def connect_nodes(self, i, j):  # Connects nodes i, j
 
@@ -488,37 +487,50 @@ class DreamAtlasGraph:
     def clean_delaunay_graph(self):
 
         quads = list()
+        done_edges = set()
         for i, j in self.get_all_connections():  # First make the set of all double-triangle quads
 
             if self.types[i] == 1 and self.types[j] == 1:  # If this is a cap/cap-circle edge ignore it
                 continue
+            elif (i, j) in done_edges:  # If we've already done this edge continue
+                continue
+            done_edges.add((j, i))
 
-            try:
-                k, l = np.intersect1d(self.get_node_connections(i), self.get_node_connections(j))[:2]  # Find the 2 shared nodes and add them
+            shared_nodes = np.intersect1d(self.get_node_connections(i), self.get_node_connections(j))  # Find the 2 shared nodes and add them
 
-                alpha = np.arccos(np.dot(self.get_unit_vector(i, k), self.get_unit_vector(j, k)))
-                gamma = np.arccos(np.dot(self.get_unit_vector(i, l), self.get_unit_vector(j, l)))
+            if len(shared_nodes) < 2:
+                print(f'GraphError: Failed to find 2 shared nodes for {i}-{j}, found {len(shared_nodes)} instead')
+                continue
+            elif len(shared_nodes) == 3:  # Tetrahedron case
+                for node in shared_nodes:
+                    shared = 0
+                    for other_node in shared_nodes:
+                        shared += self.graph[node, other_node]
+                    if shared == 0:
+                        k = node
 
-                if alpha + gamma > np.pi:  # If they do not, swap the edge correctly
-                    quads.append([i, j, k, l])
-            except:
-                print(f'GraphError: Failed to find 2 shared nodes for {i}-{j}')
+                min_dist = np.inf
+                for other_node in shared_nodes:
+                    if other_node != k:
+                        dist = self.get_raw_dist(k, other_node)
+                        if dist < min_dist:
+                            min_dist = dist
+                            l = other_node
+            else:
+                k, l = shared_nodes[0:2]
+
+            alpha = np.arccos(np.dot(self.get_unit_vector(i, k), self.get_unit_vector(j, k)))
+            gamma = np.arccos(np.dot(self.get_unit_vector(i, l), self.get_unit_vector(j, l)))
+
+            if alpha + gamma > np.pi:  # If they do not, swap the edge correctly
+                quads.append((i, j, k, l))
 
         for i, j, k, l in quads:
             self.disconnect_nodes(i, j)
             self.connect_nodes(k, l)
-            dart = self.get_closest_dart(k, l)
+            dart = self.get_closest_dart(k, l)  # This is the issue
             self.darts[k, l] = dart
             self.darts[l, k] = -dart
-
-        # faces, centroids = self.get_faces_centroids()
-        # for i, face in enumerate(faces):
-        #     if len(face) == 4:
-        #         j, k = face[0], face[2]
-        #         self.connect_nodes(j, k)
-        #         dart = self.get_closest_dart(j, k)
-        #         self.darts[j, k] = dart
-        #         self.darts[k, j] = -dart
 
     def lloyd_relaxation(self, iterations=1):
 
