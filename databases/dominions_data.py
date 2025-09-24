@@ -6,7 +6,7 @@ TERRAIN_DATA = [
     [11, 2048, 'Deep sea'], [12, 4096, 'Cave'], [13, 8192, 'Fire sites'], [14, 16384, 'Air sites'],
     [15, 32768, 'Water sites'], [16, 65536, 'Earth sites'], [17, 131072, 'Astral sites'],
     [18, 262144, 'Death sites'], [19, 524288, 'Nature sites'], [20, 1048576, 'Glamour sites'],
-    [21, 2097152, 'Blood sites'], [22, 4194304, 'Holy Sites'], [23, 8388608, 'Mountains'],
+    [21, 2097152, 'Blood sites'], [22, 4194304, 'Holy Sites'], [23, 8388608, 'Mountains'], [24, 16777216, 'Unknown'],
     [25, 33554432, 'Good throne location'], [26, 67108864, 'Good start location'], [27, 134217728, 'Bad throne location'],
     # 28 29
     [30, 1073741824, 'Warmer'], [31, 2147483648, 'Colder'], [32, 4294967296, 'Invisible'], [33, 8589934592, 'Vast'],

@@ -7,12 +7,12 @@ import matplotlib as mpl
 # Terrain preference vector is the weighting for each type of terrain
 TERRAIN_PREF_BITS = [0, 16, 32, 64, 128, 256]
 TERRAIN_PREFERENCES = [         # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
-    [5, 1, 1, 1, 1, 1],         # Balanced
-    [10, 1, 2, 1, 0.5, 0.5],    # Plains
-    [3, 1, 1, 0.5, 5, 1],       # Forest
-    [3, 4, 1, 1, 2, 1],         # Mountains
-    [3, 1, 1, 2, 1, 1],         # Desert
-    [3, 1, 3, 0.5, 2, 1],       # Swamp
+    [5, 1, 1, 1, 4, 2],         # Balanced
+    [10, 1, 2, 1, 2, 2],        # Plains
+    [3, 1, 1, 0.5, 6, 2],       # Forest
+    [3, 4, 1, 1, 5, 2],         # Mountains
+    [3, 1, 1, 2, 1, 2],         # Desert
+    [3, 1, 3, 0.5, 4, 2],       # Swamp
 ]
 TERRAIN_PREF_BALANCED, TERRAIN_PREF_PLAINS, TERRAIN_PREF_FOREST, TERRAIN_PREF_MOUNTAINS, TERRAIN_PREF_DESERT, TERRAIN_PREF_SWAMP = TERRAIN_PREFERENCES
 
@@ -22,9 +22,9 @@ LAYOUT_PREFERENCES = [  # LAYOUT_PREF_XXXX = [cap terrain, cap provinces ratio, 
     [1, 1.0, 1.0],          # Cave
     [1, 0.9, 0.8],          # Coast
     [1, 0.0, 0.9],          # Island
-    [0, 0.0, 0.8],          # Deeps
-    [0, 0.1, 0.8],          # Shallows
-    [1, 0.9, 0.7]           # Lakes
+    [0, 0.0, 0.0],          # Deeps
+    [0, 0.1, 0.6],          # Shallows
+    [1, 0.9, 0.5]           # Lakes
 ]
 LAYOUT_PREF_LAND, LAYOUT_PREF_CAVE, LAYOUT_PREF_COAST, LAYOUT_PREF_ISLAND, LAYOUT_PREF_DEEPS, LAYOUT_PREF_SHALLOWS, LAYOUT_PREF_LAKES = LAYOUT_PREFERENCES
 
@@ -48,7 +48,7 @@ REGION_VAST_INFO = [17179869184, 17179869184, 17179869184, 17179869184, 17179869
 # Blocker vector informs how different blockers are created
 REGION_BLOCKER_INFO = {  # BLOCKER_XXXX = [plane, terrain int, region_size, anchor_connections]
     6: [1, 16 + 8388608 + 68719476736 + 549755813888, 3, 2],    # Mountain Range
-    8: [2, 4 + 4096 + 68719476736 + 576460752303423488, 4, 3]       # Cave Wall
+    8: [2, 4096 + 68719476736 + 576460752303423488, 4, 3]       # Cave Wall
 }
 
 HOMELANDS_INFO = [  # Homelands format: [Nation index, terrain preference, layout preference, capital terrain int, plane]
@@ -177,12 +177,12 @@ PERIPHERY_INFO = [
     [TERRAIN_PREF_BALANCED, LAYOUT_PREF_DEEPS]      # 11 UNDERSEA
 ]
 
-TERRAIN_2_HEIGHTS_DICT = {0: 5, 4: -25, 16: 10, 32: 2, 64: 3, 128: 9, 256: 4, 2048: -10, 4096: 20, 8388608: 20, 17179869184: 3, 68719476736: -10}
+TERRAIN_2_HEIGHTS_DICT = {0: 5, 4: -25, 16: 10, 32: 2, 64: 3, 128: 9, 256: 4, 2048: -10, 4096: 20, 8388608: 20, 17179869184: 3, 68719476736: -100}
 TERRAIN_2_SHAPES_DICT = {0: 1, 4: 1.1, 8: 0.9, 16: 0.9, 32: 1.1, 64: 1.2, 128: 1.2, 256: 0.9, 2048: 1, 4096: 1.1, 8388608: 1, 17179869184: 1, 68719476736: 1}
 TERRAIN_POPULATION_ORDER = {0: 4, 16: 2, 32: 1, 64: 0, 128: 3, 256: 5}  # TERRAIN_PREF_XXXX = [plains, highlands, swamp, waste, forest, farm]
 
 # Connections config [Standard border, Mountain pass, River border, Impassable, Road, River bridge, Impassable mountain]
-NEIGHBOUR_SPECIAL_WEIGHTS = [0.8, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
+NEIGHBOUR_SPECIAL_WEIGHTS = [0.7, 0.05, 0.05, 0, 0.05, 0.02, 0.05]
 
 COLOURS_PROVINCES = mpl.colormaps['gist_stern']
 COLOURS_REGIONS = mpl.colormaps['tab20']
@@ -224,7 +224,7 @@ AGES = ['Early Age', 'Middle Age', 'Late Age']
 CAPITAL_POPULATION = 40000
 
 AGE_POPULATION_MODIFIERS = [0.8, 1.0, 1.2]
-AGE_POPULATION_SIZES = [8000, 10000, 12000]
+AGE_POPULATION_SIZES = [8400, 10500, 12600]  # Hundreds adjustment is to account for vanilla smaller/larger aberration
 AVERAGE_POPULATION_SIZES = [5500, 11000, 16500]
 RESOURCE_SPECIFIC_TERRAINS = {4224: 1, 4112: 1.6, 4128: 2, 4096: 1, 132: 1, 20: 1.4, 2052: 1.2, 4: 1, 8388608: 2, 128: 1.6, 16: 1.4}
 

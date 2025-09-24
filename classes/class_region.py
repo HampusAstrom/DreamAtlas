@@ -68,10 +68,6 @@ class Region:
             province = self.provinces[i]
             terrain_set = {0, 512, 134217728}  # Plains, No Start, Bad Throne Location
 
-            if province.plane == 2:
-                terrain_set.add(4096)  # Cave layer
-                terrain_set.add(576460752303423488)
-
             if i == 0:  # Anchor province
                 if self.layout[0] == 0:
                     terrain_set.add(4)
@@ -87,6 +83,11 @@ class Region:
                     terrain_set.add(4)  # Sea
                     if 32 in terrain_set or 64 in terrain_set or 256 in terrain_set:
                         terrain_set.remove(terrain_picks[i])
+
+            if province.plane == 2 or self.layout == LAYOUT_PREF_CAVE:
+                terrain_set.add(4096)  # Cave layer
+                if 4 not in terrain_set:
+                    terrain_set.add(576460752303423488)
 
             province.terrain_int = sum(terrain_set)
 
@@ -227,7 +228,7 @@ class HomelandRegion(Region):
             # terrain_set = {0, 512, 134217728}  # Plains, No Start, Bad Throne Location
             terrain_set = {0, 134217728}  # Plains, Bad Throne Location
 
-            if province.plane == 2:
+            if province.plane == 2 or self.layout == LAYOUT_PREF_CAVE:
                 terrain_set.add(4096)  # Cave layer
 
             if i == 0:  # Anchor province

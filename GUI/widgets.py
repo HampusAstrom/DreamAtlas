@@ -550,6 +550,7 @@ class GeneratorInfoWidget(ttk.Frame):
         self.labels[i+1] = ttk.Label(self, text='Input Issues?')
         self.metrics[i+1] = ttk.Entry(self, justify=ttk.CENTER, width=100)
         self.update(2)
+
         self.thread = Thread(target=self.check_values)
         self.thread.daemon = True
         self.thread.start()
@@ -590,6 +591,9 @@ class GeneratorInfoWidget(ttk.Frame):
                     error = True
                 if [num_players, settings_dict['player_neighbours'].get()] in NOT_AVAILABLE_GRAPHS:
                     message += 'Error: Invalid combination of players and neighbours  '
+                    error = True
+                if num_players > len(DATASET_GRAPHS):
+                    message += 'Error: Too many players  '
                     error = True
                 if error:
                     return message

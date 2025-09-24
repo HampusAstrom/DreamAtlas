@@ -51,6 +51,8 @@ def simplex_generator_geography(map_class, seed=None):
     height_maps = [None for _ in range(10)]
     pixel_maps = [None for _ in range(10)]
 
+    scale_down = 4
+
     # Generate the initial height map
     for plane in map_class.planes:
 
@@ -58,10 +60,14 @@ def simplex_generator_geography(map_class, seed=None):
         for province in map_class.province_list[plane]:
             height_array[province.index] = terrain_2_height(province.terrain_int)
 
-        noise_array = make_noise_array(map_class.map_size[plane], 150)
+        small_x_size = int(map_class.map_size[plane][0] / scale_down)
+        small_y_size = int(map_class.map_size[plane][1] / scale_down)
+        noise_array = make_noise_array([small_x_size, small_y_size], 150)
+
+        zoom = np.divide(map_class.map_size[plane], noise_array.shape[:2])
+        noise_array = sc.ndimage.zoom(noise_array, zoom=[zoom[0], zoom[1], 1], order=3, output=np.float32)[:map_class.map_size[plane][0], :map_class.map_size[plane][1]]
 
         pixel_maps[plane] = find_pixel_ownership(map_class.layout.province_graphs[plane].coordinates, map_class.map_size[plane], noise_array,  scale_down=4)
         height_maps[plane] = numba_height_map(pixel_maps[plane], height_array)
-        # pixel_maps[plane] = cleanup_isolated_pixels(pixel_maps[plane])
 
     return height_maps, pixel_maps
