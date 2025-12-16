@@ -201,6 +201,7 @@ class DominionsLayout:
             self.region_graph.planes[r] = self.region_planes[r]
             self.region_types[r] = 8
             r += 1
+        self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
 
     def generate_province_layout(self,
                                  province_list,
@@ -262,7 +263,7 @@ class DominionsLayout:
                         break
 
                 for province in [index_2_prov[i+1], index_2_prov[j+1]]:
-                    if (choice == 33 or choice == 36) and not has_terrain(terrain, 8388608):
+                    if (choice == 33 or choice == 36) and not has_terrain(province.terrain_int, 8388608):
                         province.terrain_int += 8388608
 
                 self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
