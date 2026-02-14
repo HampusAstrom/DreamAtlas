@@ -1,6 +1,7 @@
 import queue
 import threading
 from DreamAtlas import *
+from ttkbootstrap.constants import HORIZONTAL
 
 
 class GeneratorLoadingWidget(ttk.Toplevel):
@@ -13,12 +14,12 @@ class GeneratorLoadingWidget(ttk.Toplevel):
         self.columnconfigure(0, minsize=500)
         self.rowconfigure(0, weight=1, minsize=30)
         self.rowconfigure(1, weight=1, minsize=15)
-        self.progress_bar = ttk.Progressbar(self, maximum=100, mode='determinate', bootstyle='success', orient=ttk.HORIZONTAL, variable=ttk.IntVar())
+        self.progress_bar = ttk.Progressbar(self, maximum=100, mode='determinate', bootstyle='success', orient=HORIZONTAL, variable=ttk.IntVar())
         self.status_label_var = ttk.StringVar()
         self.status_label_var.set('Initialising...')
         self.status_label = ttk.Label(self, textvariable=self.status_label_var)
-        self.progress_bar.grid(row=0, column=0, sticky='NEWS', pady=2)
-        self.status_label.grid(row=1, column=0, sticky='NEWS', pady=2)
+        self.progress_bar.grid(row=0, column=0, sticky=NSEW, pady=2)
+        self.status_label.grid(row=1, column=0, sticky=NSEW, pady=2)
 
     def generate(self):
         self.queue = queue.Queue()

@@ -289,9 +289,12 @@ class DreamAtlasGraph:
         self.coordinates = np.zeros((self.size, 2), dtype=np.int32)
         self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)
 
+        print(self.map_size, self.size)
+        print('Embedding graph with %i nodes into graph with %i nodes' % (len(s_graph), self.size))
+
         # Set the graph size to embed (smaller is faster)
         scale_down = 100
-        size = np.array(self.map_size / scale_down, dtype=np.uint32)
+        size = np.maximum(1, np.array(self.map_size / scale_down, dtype=np.int64))
         connections = [[1, 0], [0, 1], [0, -1], [-1, 0]]
 
         # Make the H graph
@@ -300,8 +303,8 @@ class DreamAtlasGraph:
             for y in range(size[1]):
                 h_dict[(int(x * scale_down), int(y * scale_down))] = list()
                 for connection in connections:
-                    x_coord = int(((x + connection[0]) % size[0]) * scale_down)
-                    y_coord = int(((y + connection[1]) % size[1]) * scale_down)
+                    x_coord = int(((x + connection[0]) % int(size[0])) * scale_down)
+                    y_coord = int(((y + connection[1]) % int(size[1])) * scale_down)
                     h_dict[(int(x * scale_down), int(y * scale_down))].append((x_coord, y_coord))
         h_graph = ntx.Graph(incoming_graph_data=h_dict)  # H graph
         s_graph = ntx.Graph(incoming_graph_data=s_graph)  # S graph
