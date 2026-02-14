@@ -1,12 +1,30 @@
-from DreamAtlas import *
-from .loading import GeneratorLoadingWidget
-from .ui_data import *
 import time
 from threading import Thread
 from tkinter import TclError
+import tkinter.filedialog as tkf
+import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
     HORIZONTAL, VERTICAL, CENTER, NW, SW, NE, E, W, N, S,
     NORMAL, DISABLED, HIDDEN, READONLY, NSEW, LEFT, RIGHT, TOP, BOTTOM, BOTH, X, Y, END
+)
+from ttkbootstrap.tooltip import ToolTip
+
+from DreamAtlas.classes import DominionsMap, DreamAtlasSettings
+from DreamAtlas.databases.dominions_data import (
+    EA_NATIONS, MA_NATIONS, LA_NATIONS, TERRAIN_DATA,
+    AGE_NATIONS, VICTORY_CONDITIONS, POPTYPES, FORT, SPECIAL_NEIGHBOUR
+)
+from DreamAtlas.databases.dreamatlas_data import (
+    ART_ICON, AGES, LOAD_DIR,
+    REGION_WATER_INFO, REGION_CAVE_INFO, AGE_POPULATION_MODIFIERS,
+    NOT_AVAILABLE_GRAPHS, DATASET_GRAPHS
+)
+from DreamAtlas.functions._minor_functions import has_terrain
+from .loading import GeneratorLoadingWidget
+from .ui_data import (
+    UI_CONFIG_CUSTOMNATION, UI_CONFIG_GENERICNATION,
+    TEAMS, TERRAIN_PRIMARY, CAVE_REGIONS, WATER_REGIONS,
+    TOOLTIP_DELAY, INPUT_ENTRY_SIZE
 )
 
 

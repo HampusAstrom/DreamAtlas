@@ -1,4 +1,6 @@
-from DreamAtlas import *
+import numpy as np
+import scipy as sc
+import scipy.cluster.vq as sccvq
 
 
 # Credit to Douglas Duhaime

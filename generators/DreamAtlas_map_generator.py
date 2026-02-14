@@ -1,12 +1,24 @@
 import cProfile
+import numpy as np
 
-from DreamAtlas import *
+from DreamAtlas.classes import (
+    DominionsMap, DominionsLayout, DreamAtlasSettings, Nation, CustomNation, GenericNation
+)
+from DreamAtlas.classes.class_region import (
+    HomelandRegion, PeripheryRegion, ThroneRegion, WaterRegion,
+    CaveRegion, VastRegion, BlockerRegion
+)
+from DreamAtlas.databases.dreamatlas_data import (
+    PIXELS_PER_PROVINCE, NEIGHBOURS_FULL, REGION_WATER_INFO, REGION_CAVE_INFO
+)
+from DreamAtlas.functions import has_terrain, dibber
+from DreamAtlas.functions.numba_pixel_mapping import pb_pixel_allocation
 from .DreamAtlas_geo_generator import simplex_generator_geography
 
 
-def generator_dreamatlas(settings: type(DreamAtlasSettings),
+def generator_dreamatlas(settings: DreamAtlasSettings,
                          ui=None,
-                         seed: int = None):
+                         seed: int | None = None):
     def estimate_time(settings):
         return 45
     if ui is not None:

@@ -1,7 +1,10 @@
 import queue
 import threading
-from DreamAtlas import *
-from ttkbootstrap.constants import HORIZONTAL
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import HORIZONTAL, NSEW
+
+from DreamAtlas.generators import generator_dreamatlas
+from DreamAtlas.databases.dreamatlas_data import ART_ICON
 
 
 class GeneratorLoadingWidget(ttk.Toplevel):

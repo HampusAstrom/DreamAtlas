@@ -1,6 +1,23 @@
+import numpy as np
+import random as rd
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
 from .class_province import Province
 from .class_settings import DreamAtlasSettings
-from . import *
+from .class_nation import GenericNation, Nation
+from DreamAtlas.functions import (
+    dibber, embed_region_graph, find_shape_size,
+    terrain_2_population_weight, provinces_2_colours
+)
+from DreamAtlas.functions._minor_functions import terrain_int2list, nations_2_periphery
+from DreamAtlas.functions.numba_pixel_mapping import find_pixel_ownership
+from DreamAtlas.databases.dreamatlas_data import (
+    DATASET_GRAPHS, REGION_BLOCKER_INFO, REGION_CAVE_INFO,
+    REGION_WATER_INFO, REGION_VAST_INFO, TERRAIN_PREF_BITS,
+    LAYOUT_PREF_CAVE, LAYOUT_PREF_LAND, AGE_POPULATION_SIZES,
+    CAPITAL_POPULATION, TERRAIN_2_HEIGHTS_DICT, TERRAIN_PREF_BALANCED
+)
 
 
 class Region:
@@ -172,7 +189,7 @@ class Region:
 
 class HomelandRegion(Region):
 
-    def __init__(self, index: int, nation: Nation, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
 
         self.nation = nation
@@ -354,7 +371,7 @@ class BlockerRegion(Region):
 
 class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
 
-    def __init__(self, index: int, nation: Nation, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int = None):
         super().__init__(index, settings, seed)
 
         self.nation = nation

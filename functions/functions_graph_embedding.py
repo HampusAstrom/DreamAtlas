@@ -1,4 +1,8 @@
-from DreamAtlas import *
+import numpy as np
+import random as rd
+import networkx as ntx
+import minorminer as mnm
+from numba import njit, prange
 
 
 def embed_region_graph(graph: dict,
@@ -184,4 +188,3 @@ def attractor_adjustment(graph: dict,
                 darts_output[node][graph[node].index(ref_2_node[key_list[j]])] = _darts[i, j].astype(np.int8).tolist()
 
     return coordinates_output, darts_output
-

@@ -1,7 +1,18 @@
 # Imports all the DreamAtlas functionality and dependencies
+import struct
+import os
+import numpy as np
+from PIL import Image
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
-from . import *
+from .class_province import Province
+from .class_layout import DominionsLayout
+from .graph import DreamAtlasGraph
+from DreamAtlas.databases.dreamatlas_data import NEIGHBOURS_FULL, NEIGHBOURS, TERRAIN_2_HEIGHTS_DICT
+from DreamAtlas.functions._minor_functions import has_terrain, terrain_int2list
+from DreamAtlas.functions.numba_pixel_mapping import fast_pb_2_matrix
+from DreamAtlas.functions.functions_virtual_graph import make_virtual_graph
 
 
 class DominionsMap:
@@ -127,7 +138,7 @@ class DominionsMap:
                     elif line[0] == '#features':
                         self.magic_sites[plane] = int(line[1])
                     elif line[0] == '#nohomelandnames':
-                        self.capital_names[plane] = True
+                        self.capital_names = True
                     # if line[0] == '#nonamefilter':
                     #     self.no_names = True
                     elif line[0] == '#allowedplayer':
@@ -423,7 +434,7 @@ class DominionsMap:
 
             for owner in np.ndarray.flatten(self.pixel_map[plane], order='F'):  # Write ownership for each pixel
                 f.write(struct.pack("<h", int(owner)))
-            
+
             f.write(struct.pack("<i", 1155))  # Write final 'magic number' (allows dom6.exe to recognise the file)
 
     def publish(self,

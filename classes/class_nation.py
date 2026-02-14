@@ -1,4 +1,7 @@
-from . import *
+from DreamAtlas.databases.dominions_data import ALL_NATIONS
+from DreamAtlas.databases.dreamatlas_data import (
+    HOMELANDS_INFO, TERRAIN_PREFERENCES, LAYOUT_PREFERENCES
+)
 
 
 class Nation:

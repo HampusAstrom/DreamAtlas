@@ -1,4 +1,11 @@
-from DreamAtlas import *
+import numpy as np
+import scipy as sc
+import noise as ns
+from numba import njit, prange
+from DreamAtlas.functions.numba_pixel_mapping import (
+    find_pixel_ownership, numba_height_map
+)
+from DreamAtlas.functions import terrain_2_height
 
 
 def make_noise_array(map_size, scale):

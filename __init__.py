@@ -16,7 +16,10 @@ import minorminer as mnm                    # Divest
 import tkinter.filedialog as tkf            # Critical
 import ttkbootstrap as ttk                  # Critical
 import noise as ns                          # Critical
-from ttkbootstrap.constants import *        # Critical
+from ttkbootstrap.constants import (        # Critical
+    HORIZONTAL, VERTICAL, CENTER, NW, SW, NE, SE, E, W, N, S,
+    NORMAL, DISABLED, HIDDEN, READONLY, NSEW, LEFT, RIGHT, TOP, BOTTOM, BOTH, X, Y, END
+)
 from ttkbootstrap.tooltip import ToolTip    # Critical
 from numba import njit, prange              # Critical
 from copy import copy                       # Critical

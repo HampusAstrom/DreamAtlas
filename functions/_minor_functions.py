@@ -1,4 +1,14 @@
-from DreamAtlas import *
+# Required imports from DreamAtlas
+import numpy as np
+import random as rd
+import matplotlib.colors as mpl_colors
+from DreamAtlas.databases.dreamatlas_data import (
+    TERRAIN_2_SHAPES_DICT, AGE_POPULATION_MODIFIERS, RESOURCE_SPECIFIC_TERRAINS,
+    TERRAIN_PREF_BITS, TERRAIN_POPULATION_ORDER, TERRAIN_2_HEIGHTS_DICT,
+    TERRAIN_PREFERENCES, LAYOUT_PREFERENCES, PERIPHERY_INFO, PERIPHERY_DATA,
+    COLOURS_DICT, COLOURS_PROVINCES, COLOURS_REGIONS, COLOURS_TERRAIN,
+    COLOURS_POPULATION, COLOURS_RESOURCES
+)
 
 
 def terrain_int2list(terrain_int):          # Function for separating terrain int into the components
@@ -109,17 +119,17 @@ def single_province_2_colours(province, total_provs):  # ['Art', 'Provinces', 'R
 
     colour = ['pink'] * 6
 
-    colour[1] = mpl.colors.rgb2hex(COLOURS_PROVINCES(0.1 + (province.index % 20)/30))
+    colour[1] = mpl_colors.rgb2hex(COLOURS_PROVINCES(0.1 + (province.index % 20)/30))
     if province.parent_region is None:
-        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS(1))
+        colour[2] = mpl_colors.rgb2hex(COLOURS_REGIONS(1))
     else:
-        colour[2] = mpl.colors.rgb2hex(COLOURS_REGIONS((province.parent_region.index % 20)/20))
-    colour[3] = mpl.colors.rgb2hex(COLOURS_TERRAIN(terrain_2_colour(province.terrain_int)))
+        colour[2] = mpl_colors.rgb2hex(COLOURS_REGIONS((province.parent_region.index % 20)/20))
+    colour[3] = mpl_colors.rgb2hex(COLOURS_TERRAIN(terrain_2_colour(province.terrain_int)))
     try:
-        colour[4] = mpl.colors.rgb2hex(COLOURS_POPULATION(np.sqrt(province.population/50000)))
+        colour[4] = mpl_colors.rgb2hex(COLOURS_POPULATION(np.sqrt(province.population/50000)))
     except:
-        colour[4] = mpl.colors.rgb2hex(COLOURS_POPULATION(np.sqrt(0.2)))
-    colour[5] = mpl.colors.rgb2hex(COLOURS_RESOURCES(0.003 * terrain_2_resource_stats(terrain_int2list(province.terrain_int), age=1)))
+        colour[4] = mpl_colors.rgb2hex(COLOURS_POPULATION(np.sqrt(0.2)))
+    colour[5] = mpl_colors.rgb2hex(COLOURS_RESOURCES(0.003 * terrain_2_resource_stats(terrain_int2list(province.terrain_int), age=1)))
 
     return colour
 

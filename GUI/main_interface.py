@@ -1,10 +1,24 @@
-from .widgets import *
-from .loading import *
-from .ui_data import *
+import tkinter.filedialog as tkf
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image, ImageTk
+import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
     HORIZONTAL, VERTICAL, CENTER, NW, SW, NE, E, W, N, S,
     NORMAL, DISABLED, HIDDEN, READONLY, NSEW, LEFT, RIGHT, TOP, BOTTOM, BOTH, X, Y, END
 )
+
+from DreamAtlas.classes import DominionsMap, DreamAtlasSettings
+from DreamAtlas.classes.class_province import Province
+from DreamAtlas.classes.class_connection import Connection
+from DreamAtlas.databases.dreamatlas_data import ROOT_DIR
+from DreamAtlas.functions._minor_functions import provinces_2_colours
+from DreamAtlas.functions.numba_pixel_mapping import (
+    pixel_matrix_2_bitmap_arrays, pixel_matrix_2_borders_array
+)
+from .widgets import *
+from .loading import GeneratorLoadingWidget
+from .ui_data import *
 
 
 class MainInterface(ttk.Frame):

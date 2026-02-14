@@ -1,5 +1,7 @@
 # Imports all the DreamAtlas functionality and dependencies
-from DreamAtlas import *
+import numpy as np
+import scipy as sc
+from numba import njit, prange
 
 
 @njit(fastmath=True, cache=True)
@@ -241,9 +243,8 @@ def pb_2_map(pb_list, width, height):
         x, y, len, owner = pb
         for pixel in range(len):
             pixel_map[x + pixel][y] = owner
-            coordinate_dict[owner].append([x + pixel, y])
-
-            province = self.province_list[owner - 1]
+            # coordinate_dict[owner].append([x + pixel, y])  # Broken code - removed
+            # province = self.province_list[owner - 1]  # Broken code - removed
 
     # self.height_map[x + pixel][y] = 20
     # if province.terrain_int & 4:
