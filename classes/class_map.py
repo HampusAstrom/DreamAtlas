@@ -9,13 +9,25 @@ import matplotlib.cm as cm
 from .class_province import Province
 from .class_layout import DominionsLayout
 from .graph import DreamAtlasGraph
-from DreamAtlas.databases.dreamatlas_data import NEIGHBOURS_FULL, NEIGHBOURS, TERRAIN_2_HEIGHTS_DICT
+from DreamAtlas.databases.dreamatlas_data import NEIGHBOURS_FULL, NEIGHBOURS, TERRAIN_2_HEIGHTS_DICT, ROOT_DIR
 from DreamAtlas.functions._minor_functions import has_terrain, terrain_int2list
 from DreamAtlas.functions.numba_pixel_mapping import fast_pb_2_matrix
 from DreamAtlas.functions.functions_virtual_graph import make_virtual_graph
 
 
 class DominionsMap:
+    # Type hints for class attributes
+    settings: 'DreamAtlasSettings | None'  # type: ignore
+    image_file: list[str | None]
+    image_pil: list  # type: ignore
+    pixel_map: list[np.ndarray | None]  # type: ignore
+    height_map: list[np.ndarray | None]  # type: ignore
+    min_dist: list[float | None]
+    planes: list[int]  # type: ignore
+    scale: list  # type: ignore
+    map_size: list  # type: ignore
+    map_dom_colour: list[int]  # type: ignore
+    province_capital_locations: list  # type: ignore
 
     def __init__(self):  # Map classes always initialise empty to be filled in later
 
@@ -35,7 +47,7 @@ class DominionsMap:
         self.image_pil = [None for _ in range(10)]
         self.map_size = [[0, 0] for _ in range(10)]
         self.scale = [[0, 0] for _ in range(10)]
-        self.planes = set()
+        self.planes = []  # type: ignore
 
         # Basic map data/commands
         self.dom_version = '600'
@@ -228,8 +240,9 @@ class DominionsMap:
             for (i, j) in self.neighbour_list[plane]:
                 self.layout.province_graphs[plane].connect_nodes(i-1, j-1)
 
-            for (i, j, c) in self.special_neighbour_list[plane]:
-                self.layout.special_neighbours[plane].append([i, j, c])
+            # TODO: Implement special_neighbours attribute in DominionsLayout
+            # for (i, j, c) in self.special_neighbour_list[plane]:
+            #     self.layout.special_neighbours[plane].append([i, j, c])
 
             if self.pixel_map[plane] is None:
                 self.pixel_map[plane] = fast_pb_2_matrix(self.pixel_owner_list[plane], width=self.map_size[plane][0], height=self.map_size[plane][1])
@@ -438,8 +451,8 @@ class DominionsMap:
             f.write(struct.pack("<i", 1155))  # Write final 'magic number' (allows dom6.exe to recognise the file)
 
     def publish(self,
-                location: str = None,
-                name: str = None,
+                location: str | None = None,
+                name: str | None = None,
                 art_style: int = 0):
 
         if location is None:

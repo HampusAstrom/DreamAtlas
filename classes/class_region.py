@@ -25,7 +25,7 @@ class Region:
     def __init__(self,
                  index: int,
                  settings: DreamAtlasSettings,
-                 seed: int = None):
+                 seed: int | None = None):
 
         self.index = index
         self.settings = settings
@@ -45,7 +45,7 @@ class Region:
         self.region_size = 1
         self.anchor_connections = 1
 
-    def generate_graph(self, seed: int = None):
+    def generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 
@@ -70,7 +70,7 @@ class Region:
 
             self.provinces.append(province)
 
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         terrain_picks = list()
@@ -108,7 +108,7 @@ class Region:
 
             province.terrain_int = sum(terrain_set)
 
-    def generate_population(self, seed: int = None):  # Generates the population for the region
+    def generate_population(self, seed: int | None = None):  # Generates the population for the region
 
         if self.settings.pop_balancing == 0:  # No population balancing
             return
@@ -128,9 +128,9 @@ class Region:
 
     def embed_region(self,
                      global_coordinates: list,
-                     scale: list[list[int, int], ...],
-                     map_size: list[list[int, int], ...],
-                     seed: int = None):  # Embeds the region in a global space
+                     scale: list[list[int, int]],
+                     map_size: list[list[int, int]],
+                     seed: int | None = None):  # Embeds the region in a global space
         dibber(self, seed)
 
         plane_scale = map_size[self.plane] / map_size[1]
@@ -189,7 +189,7 @@ class Region:
 
 class HomelandRegion(Region):
 
-    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.nation = nation
@@ -201,7 +201,7 @@ class HomelandRegion(Region):
         self.anchor_connections = self.settings.cap_connections
         self.name = nation.name
 
-    def generate_graph(self, seed: int = None):
+    def generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 
@@ -229,7 +229,7 @@ class HomelandRegion(Region):
 
             self.provinces.append(province)
 
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         terrain_picks = list()
@@ -271,7 +271,7 @@ class HomelandRegion(Region):
 
 class PeripheryRegion(Region):
 
-    def __init__(self, index: int, nations: list, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, nations: list, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.nations = nations
@@ -283,13 +283,13 @@ class PeripheryRegion(Region):
 
 class ThroneRegion(Region):
 
-    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.terrain_pref, self.layout = TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND
         self.name = f'Throne {index}'
 
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
@@ -301,7 +301,7 @@ class ThroneRegion(Region):
 
 class WaterRegion(Region):
 
-    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.terrain_pref, self.layout, self.region_size, self.anchor_connections = REGION_WATER_INFO[settings.water_region_type]
@@ -310,7 +310,7 @@ class WaterRegion(Region):
 
 class CaveRegion(Region):
 
-    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.terrain = 4096
@@ -321,20 +321,20 @@ class CaveRegion(Region):
 
 class VastRegion(Region):
 
-    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.terrain = rd.choice(REGION_VAST_INFO)
         self.name = f'Vast {index}'
 
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
             province.terrain_int = self.terrain + 8589934592 + 134217728
 
-    def generate_population(self, seed: int = None):
+    def generate_population(self, seed: int | None = None):
 
         if self.settings.pop_balancing == 0:  # No population balancing
             return
@@ -346,20 +346,20 @@ class VastRegion(Region):
 
 class BlockerRegion(Region):
 
-    def __init__(self, index: int, blocker: int, settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, blocker: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.blocker = blocker
         self.plane, self.terrain, self.region_size, self.anchor_connections = REGION_BLOCKER_INFO[blocker]
 
-    def generate_terrain(self, seed: int = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
             province.terrain_int = self.terrain
 
-    def generate_population(self, seed: int = None):
+    def generate_population(self, seed: int | None = None):
 
         if self.settings.pop_balancing == 0:  # No population balancing
             return
@@ -371,7 +371,7 @@ class BlockerRegion(Region):
 
 class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
 
-    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int = None):
+    def __init__(self, index: int, nation: "Nation", settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
         self.nation = nation
@@ -383,7 +383,7 @@ class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
         self.anchor_connections = self.settings.cap_connections - 1
         self.name = nation.name
 
-    def generate_graph(self, seed: int = None):
+    def generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 

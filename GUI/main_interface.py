@@ -16,9 +16,9 @@ from DreamAtlas.functions._minor_functions import provinces_2_colours
 from DreamAtlas.functions.numba_pixel_mapping import (
     pixel_matrix_2_bitmap_arrays, pixel_matrix_2_borders_array
 )
-from .widgets import *
+from .widgets import *  # type: ignore
 from .loading import GeneratorLoadingWidget
-from .ui_data import *
+from .ui_data import *  # type: ignore
 
 
 class MainInterface(ttk.Frame):
@@ -50,15 +50,15 @@ class MainInterface(ttk.Frame):
         self.lense_options = list()
         self.plane_options = list()
 
-        self.viewing_bitmaps = None
-        self.bitmap_colors = None
-        self.viewing_photoimages = None
-        self.viewing_connections = None
-        self.viewing_nodes = None
-        self.viewing_borders = None
+        self.viewing_bitmaps: list | None = None
+        self.bitmap_colors: list | None = None
+        self.viewing_photoimages: list | None = None
+        self.viewing_connections: list | None = None
+        self.viewing_nodes: list | None = None
+        self.viewing_borders: list | None = None
         self.icons = None
 
-        self.editor_focus = None
+        self.editor_focus: InputWidget | None = None
 
         self.throne_image = ImageTk.PhotoImage(Image.open(ROOT_DIR / 'databases/ui_images/throne.png'))
         self.capital_image = ImageTk.PhotoImage(Image.open(ROOT_DIR / 'databases/ui_images/capital.png'))
@@ -175,16 +175,20 @@ class MainInterface(ttk.Frame):
                             return
 
         def right_click(event):
+            viewing_nodes = self.viewing_nodes
+            assert viewing_nodes is not None, "viewing_nodes must be initialized"
+            viewing_connections = self.viewing_connections
+            assert viewing_connections is not None, "viewing_connections must be initialized"
 
             tag = self.viewing_canvas.find_closest(self.viewing_canvas.canvasx(event.x), self.viewing_canvas.canvasy(event.y))
-            if 'clickable' in self.viewing_canvas.gettags(tag):
-                if 'nodes' in self.viewing_canvas.gettags(tag):
-                    for i, iid in self.viewing_nodes[self.current_plane]:
+            if 'clickable' in self.viewing_canvas.gettags(tag[0]):
+                if 'nodes' in self.viewing_canvas.gettags(tag[0]):
+                    for i, iid in viewing_nodes[self.current_plane]:
                         if iid == tag[0]:
                             self.focus = self.map.province_list[self.current_plane][i-1]
                             break
-                elif 'connections' in self.viewing_canvas.gettags(tag):
-                    for connection, iid in self.viewing_connections[self.current_plane]:
+                elif 'connections' in self.viewing_canvas.gettags(tag[0]):
+                    for connection, iid in viewing_connections[self.current_plane]:
                         if iid == tag[0]:
                             self.focus = connection
                             break
@@ -304,7 +308,7 @@ class MainInterface(ttk.Frame):
                 self.viewing_borders[plane] = [iid, border]
 
                 # Making connection objects
-                virtual_graph, virtual_coordinates = self.map.layout.province_graphs[plane].get_virtual_graph()
+                virtual_graph, virtual_coordinates = self.map.layout.province_graphs[plane].get_virtual_graph()  # type: ignore
                 done_nodes = set()
                 for i, (x1, y1) in enumerate(virtual_coordinates):
                     for j in np.argwhere(virtual_graph[i, :] == 1):
@@ -318,11 +322,11 @@ class MainInterface(ttk.Frame):
 
                         if j not in done_nodes:
                             x2, y2 = virtual_coordinates[j]
-                            iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)
+                            iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)  # type: ignore
                             self.viewing_connections[plane].append([connection, iid])
 
-                    if i < self.map.layout.province_graphs[plane].size:
-                        iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)
+                    if i < self.map.layout.province_graphs[plane].size:  # type: ignore
+                        iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)  # type: ignore
                         self.viewing_nodes[plane].append([i+1, iid])
                     done_nodes.add(i)
 
@@ -358,9 +362,13 @@ class MainInterface(ttk.Frame):
                     self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_PROVINCE, target_class=self.focus)
                 elif type(self.focus) is Connection:
                     self.editor_focus = InputWidget(master=self.editor_frame, ui_config=UI_CONFIG_CONNECTION, target_class=self.focus)
-                self.editor_focus.class_2_input()
-                self.editor_focus.pack(fill=BOTH, expand=True, side=TOP)
-                self.editor_focus.make_size(1)
+
+                editor_focus = self.editor_focus
+                assert editor_focus is not None, "editor_focus must be set"
+
+                editor_focus.class_2_input()
+                editor_focus.pack(fill=BOTH, expand=True, side=TOP)
+                editor_focus.make_size(1)
 
     def update_plane_lense_panels(self):
         if not self.empty:
@@ -379,10 +387,16 @@ class MainInterface(ttk.Frame):
 
     def refresh_view(self):  # This function handles switching the views and updating the viewer images
         if not self.empty:  # If there is data
+            viewing_photoimages = self.viewing_photoimages
+            assert viewing_photoimages is not None, "viewing_photoimages must be initialized"
+            viewing_bitmaps = self.viewing_bitmaps
+            assert viewing_bitmaps is not None, "viewing_bitmaps must be initialized"
+            bitmap_colors = self.bitmap_colors
+            assert bitmap_colors is not None, "bitmap_colors must be initialized"
 
             new_plane = self.selected_plane.get()
 
-            if self.viewing_photoimages[new_plane] is None:
+            if viewing_photoimages[new_plane] is None:
                 self.lense_options[0].config(state=DISABLED)
                 if self.selected_lense.get() == 0:
                     self.selected_lense.set(1)
@@ -400,14 +414,14 @@ class MainInterface(ttk.Frame):
                     if new_lense == 0:
                         art_active = 1
                     elif new_lense != self.current_lense or new_plane != self.current_plane:
-                        for i, iid, bitmap in self.viewing_bitmaps[plane]:  # Update the province bitmap colours
-                            colour = self.bitmap_colors[plane][i-1][new_lense]
+                        for i, iid, bitmap in viewing_bitmaps[plane]:  # Update the province bitmap colours
+                            colour = bitmap_colors[plane][i-1][new_lense]
                             bitmap._BitmapImage__photo.config(foreground=colour)
                             if new_lense != 0:
                                 self.viewing_canvas.itemconfigure(f'plane{plane}', state=NORMAL)
 
-                    if self.viewing_photoimages[plane] is not None:
-                        i, iid, photoimage, trans_photoimage = self.viewing_photoimages[plane]
+                    if viewing_photoimages[plane] is not None:
+                        i, iid, photoimage, trans_photoimage = viewing_photoimages[plane]
                         self.viewing_canvas.itemconfigure(iid, state=UI_STATES[art_active])  # Update the art layer
 
                     for variable, tag, active, _ in self.display_options:  # Update the display options

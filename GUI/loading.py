@@ -34,8 +34,8 @@ class GeneratorLoadingWidget(ttk.Toplevel):
         try:
             msg = self.queue.get_nowait()
             if msg == "Task finished":
-                self.master.map = self.generator.map
-                self.master.update_gui()
+                self.master.map = self.generator.map  # type: ignore
+                self.master.update_gui()  # type: ignore
                 self.destroy()
         except queue.Empty:
             self.after(100, self.process_queue)
@@ -47,7 +47,14 @@ class ThreadedGenerator(threading.Thread):
         self.queue = queue
         self.ui = ui
         self.settings = settings
+        self.map = None  # Initialize to None so it always exists
 
     def run(self):
-        self.map = generator_dreamatlas(settings=self.settings, ui=self.ui)
-        self.queue.put("Task finished")
+        try:
+            self.map = generator_dreamatlas(settings=self.settings, ui=self.ui)
+            self.queue.put("Task finished")
+        except Exception as e:
+            print(f"ERROR in generator thread: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            self.queue.put("Task finished")  # Still signal completion even on error

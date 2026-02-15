@@ -6,7 +6,7 @@ from numba import njit, prange
 
 
 def embed_region_graph(graph: dict,
-                       map_size: np.array,
+                       map_size: np.ndarray,
                        scale_down: int,
                        seed: int):
 
@@ -86,13 +86,13 @@ def embed_region_graph(graph: dict,
 
 
 @njit(parallel=True)
-def _numba_attractor_adjustment(key_list: np.array,
-                                graph: np.array,
-                                coordinates: np.array,
-                                darts: np.array,
-                                attractor_array: np.array,
+def _numba_attractor_adjustment(key_list: np.ndarray,
+                                graph: np.ndarray,
+                                coordinates: np.ndarray,
+                                darts: np.ndarray,
+                                attractor_array: np.ndarray,
                                 damping_ratio: float,
-                                map_size: np.array,
+                                map_size: np.ndarray,
                                 iterations: int):
     dict_size = len(key_list)
 

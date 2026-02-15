@@ -18,12 +18,12 @@ def _numba_norm(v):
 
 
 @njit(parallel=True, cache=True)
-def _numba_attractor_adjustment(graph: np.array,
-                                coordinates: np.array,
-                                darts: np.array,
-                                attractor_array: np.array,
+def _numba_attractor_adjustment(graph: np.ndarray,
+                                coordinates: np.ndarray,
+                                darts: np.ndarray,
+                                attractor_array: np.ndarray,
                                 damping_ratio: float,
-                                map_size: np.array,
+                                map_size: np.ndarray,
                                 iterations: int):
     dict_size = len(coordinates)
     net_velocity = np.zeros((dict_size, 2), dtype=np.float64)
@@ -67,13 +67,13 @@ def _numba_attractor_adjustment(graph: np.array,
 
 
 @njit(parallel=True, cache=True)
-def _numba_spring_adjustment(graph: np.array,
-                             coordinates: np.array,
-                             darts: np.array,
-                             weight_array: np.array,
-                             map_size: np.array,
-                             ratios: np.array,
-                             connections: np.array,
+def _numba_spring_adjustment(graph: np.ndarray,
+                             coordinates: np.ndarray,
+                             darts: np.ndarray,
+                             weight_array: np.ndarray,
+                             map_size: np.ndarray,
+                             ratios: np.ndarray,
+                             connections: np.ndarray,
                              iterations: int):
 
     dict_size = len(coordinates)
@@ -284,7 +284,7 @@ class DreamAtlasGraph:
 
         return faces, centroids
 
-    def embed_graph(self, s_graph, seed: int):
+    def embed_graph(self, s_graph, seed: int | None):
 
         self.coordinates = np.zeros((self.size, 2), dtype=np.int32)
         self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)

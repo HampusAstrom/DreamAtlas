@@ -24,12 +24,12 @@ class DominionsLayout:
         self.wraparound = self.map.wraparound
 
         # Region level layout - supersedes planes
-        self.region_planes = None
-        self.region_types = None
-        self.region_graph = None
+        self.region_planes: dict[int, int] | None = None
+        self.region_types: dict[int, int] | None = None
+        self.region_graph: DreamAtlasGraph | None = None
 
         # Province level layout - list per plane
-        self.province_graphs = [None for _ in range(10)]
+        self.province_graphs: list[DreamAtlasGraph | None] = [None for _ in range(10)]
         self.edge_types = [list() for _ in range(10)]
         self.connections = [list() for _ in range(10)]
         self.gates = [list() for _ in range(10)]
@@ -37,9 +37,9 @@ class DominionsLayout:
 
     def generate_region_layout(self,
                                settings: DreamAtlasSettings,
-                               map_size: np.array,
+                               map_size: np.ndarray,
                                nation_list: list,
-                               seed: int = None):
+                               seed: int | None = None):
         dibber(self, seed)  # Setting random seed
 
         teams = dict()
@@ -216,27 +216,37 @@ class DominionsLayout:
     def generate_province_layout(self,
                                  province_list,
                                  plane: int,
-                                 seed: int = None):
+                                 seed: int | None = None):
+        """Initialize province graph for a specific plane. Must be called before generate_connections."""
         dibber(self, seed)  # Setting random seed
 
-        self.province_graphs[plane] = DreamAtlasGraph(len(province_list), map_size=self.map_size[plane], wraparound=self.wraparound)
+        graph = DreamAtlasGraph(len(province_list), map_size=self.map_size[plane], wraparound=self.wraparound)
         for i, province in enumerate(province_list):
-            self.province_graphs[plane].coordinates[i] = province.coordinates
+            graph.coordinates[i] = province.coordinates
 
             if province.capital_location or province.capital_circle:
-                self.province_graphs[plane].types[i] = 1
-            # self.province_graphs[plane].weights[i] = province.size
+                graph.types[i] = 1
+            # graph.weights[i] = province.size
 
-        self.province_graphs[plane].make_delaunay_graph()
-        self.province_graphs[plane].lloyd_relaxation(iterations=2)
-        self.province_graphs[plane].spring_adjustment()
-        self.province_graphs[plane].clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
-        # print(len(self.province_graphs[plane].get_all_connections()))
+        graph.make_delaunay_graph()
+        graph.lloyd_relaxation(iterations=2)
+        graph.spring_adjustment()
+        graph.clean_delaunay_graph()  # Clean the graph with swaps for non-cap provinces
+        # print(len(graph.get_all_connections()))
+
+        self.province_graphs[plane] = graph
 
     def generate_connections(self,
                                     plane: int,
-                                    seed: int = None):
+                                    seed: int | None = None):
+        """Generate connections between provinces. Requires generate_province_layout() to be called first."""
         dibber(self, seed)  # Setting random seed
+
+        graph = self.province_graphs[plane]
+        assert graph is not None, f"generate_province_layout() must be called for plane {plane} first"
+
+        region_types = self.region_types
+        assert region_types is not None, "generate_region_layout() must be called first"
 
         index_2_prov = dict()
         for province in self.map.province_list[plane]:
@@ -244,7 +254,7 @@ class DominionsLayout:
 
         self.connections[plane] = list()
         done_edges = set()
-        for i, j in self.province_graphs[plane].get_all_connections():
+        for i, j in graph.get_all_connections():
             if (j, i) not in done_edges:
                 done_edges.add((i, j))
 
@@ -257,7 +267,7 @@ class DominionsLayout:
                     elif has_terrain(terrain, 68719476736):  # if cave wall
                         choice = 4
                         break
-                    elif self.region_types[province.parent_region.index] == 6:  # if blocker
+                    elif region_types[province.parent_region.index] == 6:  # if blocker
                         choice = 36
                         break
                     elif has_terrain(terrain, 4):
@@ -267,7 +277,7 @@ class DominionsLayout:
                         choice = 0
                         break
 
-                for dart in self.province_graphs[plane].darts[i, j]:
+                for dart in graph.darts[i, j]:
                     if dart != 0 and choice != 4:
                         choice = 0
                         break
@@ -278,9 +288,19 @@ class DominionsLayout:
 
                 self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
 
-        self.min_dist[plane] = self.province_graphs[plane].get_min_dist()
+        self.min_dist[plane] = float(graph.get_min_dist())
 
-    def generate_gates(self, region_list, seed: int = None):
+    def generate_gates(self, region_list, seed: int | None = None):
+        """Generate gates between regions. Requires generate_region_layout() to be called first."""
+        region_types = self.region_types
+        assert region_types is not None, "generate_region_layout() must be called first"
+
+        region_graph = self.region_graph
+        assert region_graph is not None, "generate_region_layout() must be called first"
+
+        region_planes = self.region_planes
+        assert region_planes is not None, "generate_region_layout() must be called first"
+
         dibber(self, seed)  # Setting random seed
         self.gates = [[] for _ in range(10)]
         gate = 1
@@ -288,10 +308,10 @@ class DominionsLayout:
         for region_type in [0, 4]:
             for i, i_region in enumerate(region_list[region_type]):
 
-                if self.region_planes[i_region.index] == 2:
+                if region_planes[i_region.index] == 2:
                     possible_j_regions = list()
                     for j, j_region in enumerate(region_list[1]):
-                        if self.region_graph.graph[i_region.index, j_region.index]:
+                        if region_graph.graph[i_region.index, j_region.index]:
                             possible_j_regions.append(j_region)
                     rd.shuffle(possible_j_regions)
 
@@ -312,14 +332,23 @@ class DominionsLayout:
                         gate += 1
 
     def plot(self):
+        """Visualize the layout. Requires generate_region_layout() to be called first."""
+        region_graph = self.region_graph
+        assert region_graph is not None, "generate_region_layout() must be called first"
+
+        region_types = self.region_types
+        assert region_types is not None, "generate_region_layout() must be called first"
+
+        region_planes = self.region_planes
+        assert region_planes is not None, "generate_region_layout() must be called first"
 
         fix_reg, ax_reg = plt.subplots()
 
         # Plot regions
-        virtual_graph, virtual_coordinates = self.region_graph.get_virtual_graph()
+        virtual_graph, virtual_coordinates = region_graph.get_virtual_graph()
 
         for i, (x, y) in enumerate(virtual_coordinates):  # region connections
-            if i in self.region_types:
+            if i in region_types:
                 for j in np.argwhere(virtual_graph[i, :] == 1):
                     j = j[0]
                     x2, y2 = virtual_coordinates[j]
@@ -327,8 +356,8 @@ class DominionsLayout:
 
         region_colours = ['g*', 'rD', 'y^', 'bo', 'rv', 'ms', 'kX', 'kX', 'kX']
         for i, (x, y) in enumerate(virtual_coordinates):  # region connections
-            if i in self.region_types:
-                ax_reg.plot(x, y, region_colours[self.region_types[i]])
+            if i in region_types:
+                ax_reg.plot(x, y, region_colours[region_types[i]])
                 ax_reg.text(x, y, str(i))
 
         ax_reg.set(xlim=(0, self.map_size[1][0]), ylim=(0, self.map_size[1][1]))

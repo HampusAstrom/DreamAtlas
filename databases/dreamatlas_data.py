@@ -213,12 +213,12 @@ if getattr(sys, "frozen", False):
     # path into variable
     ROOT_DIR = pathlib.Path(__file__).parent.parent
     LOAD_DIR = pathlib.Path(sys.executable).parent
-    ART_ICON = ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png'
+    ART_ICON = str(ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png')
 else:
     # Normal development mode. Use os.getcwd() or __file__ as appropriate in your case...
     ROOT_DIR = pathlib.Path(__file__).parent.parent
     LOAD_DIR = ROOT_DIR
-    ART_ICON = ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png'
+    ART_ICON = str(ROOT_DIR / r'databases/ui_images/DreamAtlasLogoSquare.png')
 
 AGES = ['Early Age', 'Middle Age', 'Late Age']
 

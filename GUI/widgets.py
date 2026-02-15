@@ -47,10 +47,10 @@ class InputWidget(ttk.Frame):
         self.ui_config = ui_config
         if target_class is None:
             target_class = type(target_type)
-        self.target_class = target_class
-        self.target_location = target_location
-        self.map = map
-        self.parent_widget = parent_widget
+        self.target_class: type | None = target_class
+        self.target_location: list | None = target_location
+        self.map: DominionsMap | None = map
+        self.parent_widget: ttk.Frame | None = parent_widget
 
         self.labels = dict()
         self.inputs = dict()
@@ -65,7 +65,7 @@ class InputWidget(ttk.Frame):
             ['Close', lambda: self.master.destroy()]
         ]
 
-        self.wrap_frame = None
+        self.wrap_frame: ttk.Canvas | None = None
         self.frame_tags = list()
         self.frames = list()
         self.cols = 0
@@ -75,9 +75,12 @@ class InputWidget(ttk.Frame):
         self.make_size(None)  # Initial resize to set the input window size
 
     def make_size(self, event):  # Resize the input window to match the current size
-        self.wrap_frame.update()
-        new_small_cols = max(1, self.wrap_frame.winfo_width() // INPUT_ENTRY_SIZE)
-        new_nation_cols = max(1, int(self.wrap_frame.winfo_width() / 120))
+        wrap_frame = self.wrap_frame
+        assert wrap_frame is not None, "wrap_frame must be initialized"
+
+        wrap_frame.update()
+        new_small_cols = max(1, wrap_frame.winfo_width() // INPUT_ENTRY_SIZE)
+        new_nation_cols = max(1, int(wrap_frame.winfo_width() / 120))
 
         for i, frame in enumerate(self.frames):
             for j, child in enumerate(frame.winfo_children()):
@@ -103,12 +106,12 @@ class InputWidget(ttk.Frame):
 
         y = 5
         for i, frame in enumerate(self.frames):
-            self.wrap_frame.itemconfig(self.frame_tags[i], width=self.wrap_frame.winfo_width()-5)
-            self.wrap_frame.coords(self.frame_tags[i], 5, y)
-            self.wrap_frame.update()
+            wrap_frame.itemconfig(self.frame_tags[i], width=wrap_frame.winfo_width()-5)
+            wrap_frame.coords(self.frame_tags[i], 5, y)
+            wrap_frame.update()
             y += frame.winfo_height() + 2
 
-        self.wrap_frame.configure(scrollregion=self.wrap_frame.bbox('all'))
+        wrap_frame.configure(scrollregion=wrap_frame.bbox('all'))
 
     def make_gui(self):
 
@@ -188,60 +191,66 @@ class InputWidget(ttk.Frame):
             self.inputs['custom_nations'].update(disciples=disciples)
 
     def input_2_class(self):
+        target_class = self.target_class
+        assert target_class is not None, "target_class must be set to update"
+
         for attribute in self.ui_config['attributes']:
             attribute_type, widget, _, options, active, __ = self.ui_config['attributes'][attribute]
             if active:
                 if widget == 0:
-                    setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
+                    setattr(target_class, attribute, attribute_type(self.inputs[attribute].get()))
                 elif widget == 1:
-                    setattr(self.target_class, attribute, attribute_type(options.index(self.inputs[attribute].get())))
+                    setattr(target_class, attribute, attribute_type(options.index(self.inputs[attribute].get())))
                 elif widget == 2:
-                    setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
+                    setattr(target_class, attribute, attribute_type(self.inputs[attribute].get()))
                 elif widget == 3:
-                    setattr(self.target_class, attribute, attribute_type(self.variables[attribute].get()))
+                    setattr(target_class, attribute, attribute_type(self.variables[attribute].get()))
                 elif widget == 4:
-                    self.target_class.age = AGES.index(self.inputs[attribute].age.get())
-                    self.target_class.vanilla_nations = self.inputs['vanilla_nations'].get()
+                    target_class.age = AGES.index(self.inputs[attribute].age.get())
+                    target_class.vanilla_nations = self.inputs['vanilla_nations'].get()
                 elif widget == 5:
-                    self.target_class.custom_nations = self.inputs['custom_nations'].custom_nation_list
-                    self.target_class.generic_nations = self.inputs['custom_nations'].generic_nation_list
+                    target_class.custom_nations = self.inputs['custom_nations'].custom_nation_list
+                    target_class.generic_nations = self.inputs['custom_nations'].generic_nation_list
                 elif widget == 6:
-                    setattr(self.target_class, attribute, attribute_type(self.inputs[attribute].get()))
+                    setattr(target_class, attribute, attribute_type(self.inputs[attribute].get()))
                 elif widget == 7:
-                    self.target_class.terrain_int = int(self.inputs['terrain_int'].terrain_int.get())
+                    target_class.terrain_int = int(self.inputs['terrain_int'].terrain_int.get())
 
     def class_2_input(self):
+        target_class = self.target_class
+        assert target_class is not None, "target_class must be set to populate"
+
         for attribute in self.ui_config['attributes']:
             attribute_type, widget, _, options, active, ___ = self.ui_config['attributes'][attribute]
 
-            if getattr(self.target_class, attribute) is not None:
+            if getattr(target_class, attribute) is not None:
 
                 if widget == 0:
                     self.inputs[attribute].configure(state=NORMAL)
                     self.inputs[attribute].delete(0, END)
-                    self.inputs[attribute].insert(1, str(getattr(self.target_class, attribute)))
+                    self.inputs[attribute].insert(1, str(getattr(target_class, attribute)))
                     if not active:
                         self.inputs[attribute].configure(state=READONLY)
 
                 elif widget == 1:
-                    self.inputs[attribute].set(options[getattr(self.target_class, attribute)])
+                    self.inputs[attribute].set(options[getattr(target_class, attribute)])
                 elif widget == 2:
-                    self.inputs[attribute].set(getattr(self.target_class, attribute))
+                    self.inputs[attribute].set(getattr(target_class, attribute))
                 elif widget == 3:
-                    self.variables[attribute].set(getattr(self.target_class, attribute))
+                    self.variables[attribute].set(getattr(target_class, attribute))
                 elif widget == 4:
-                    self.inputs[attribute].age.set(AGES[getattr(self.target_class, 'age')])
-                    self.inputs[attribute].vanilla_nation_list = getattr(self.target_class, attribute)
-                    self.inputs[attribute].update(disciples=getattr(self.target_class, 'disciples'))
+                    self.inputs[attribute].age.set(AGES[getattr(target_class, 'age')])
+                    self.inputs[attribute].vanilla_nation_list = getattr(target_class, attribute)
+                    self.inputs[attribute].update(disciples=getattr(target_class, 'disciples'))
                 elif widget == 5:
-                    self.inputs[attribute].custom_nation_list = getattr(self.target_class, 'custom_nations')
-                    self.inputs[attribute].generic_nation_list = getattr(self.target_class, 'generic_nations')
-                    self.inputs[attribute].update(disciples=getattr(self.target_class, 'disciples'))
+                    self.inputs[attribute].custom_nation_list = getattr(target_class, 'custom_nations')
+                    self.inputs[attribute].generic_nation_list = getattr(target_class, 'generic_nations')
+                    self.inputs[attribute].update(disciples=getattr(target_class, 'disciples'))
                 elif widget == 6:
-                    self.inputs[attribute].set(self.inputs[attribute].set_dict[getattr(self.target_class, attribute)])
+                    self.inputs[attribute].set(self.inputs[attribute].set_dict[getattr(target_class, attribute)])
                 elif widget == 7:
-                    self.inputs[attribute].terrain_int.set(getattr(self.target_class, 'terrain_int'))
-                    self.inputs[attribute].update(cols=self.cols*2, set_terrain=getattr(self.target_class, 'terrain_int'))
+                    self.inputs[attribute].terrain_int.set(getattr(target_class, 'terrain_int'))
+                    self.inputs[attribute].update(cols=self.cols*2, set_terrain=getattr(target_class, 'terrain_int'))
 
 
 
@@ -269,22 +278,36 @@ class InputWidget(ttk.Frame):
         self.input_2_class()
 
     def add(self):
-        self.target_location.append(self.input_2_list())
-        self.parent_widget.update()
+        target_location = self.target_location
+        assert target_location is not None, "target_location must be set to add"
+        parent_widget = self.parent_widget
+        assert parent_widget is not None, "parent_widget must be set to add"
+
+        target_location.append(self.input_2_list())
+        parent_widget.update()
         self.master.destroy()
 
     def generate(self):
+        target_class = self.target_class
+        assert target_class is not None, "target_class must be set to generate"
+
         self.input_2_class()
-        _ = GeneratorLoadingWidget(master=self.master.master, map=self.map, settings=self.target_class)
+        _ = GeneratorLoadingWidget(master=self.master.master, map=self.map, settings=target_class)
         _.generate()
         self.master.destroy()
 
     def save(self):
+        target_class = self.target_class
+        assert target_class is not None, "target_class must be set to save"
+
         self.input_2_class()
-        self.target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=LOAD_DIR))
+        target_class.save_file(tkf.asksaveasfilename(parent=self.master, initialdir=LOAD_DIR))
 
     def load(self):
-        self.target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=LOAD_DIR))
+        target_class = self.target_class
+        assert target_class is not None, "target_class must be set to load"
+
+        target_class.load_file(tkf.askopenfilename(parent=self.master, initialdir=LOAD_DIR))
         self.class_2_input()
 
     def clear(self):
@@ -312,9 +335,9 @@ class VanillaNationWidget(ttk.Frame):
         self.vanilla_nation_list = list()
 
         self.disciples = 0
-        self.options = None
-        self.variables = None
-        self.teams = None
+        self.options: dict = {}
+        self.variables: dict = {}
+        self.teams: dict = {}
         self.miniframes = list()
 
         self.update()
@@ -599,7 +622,7 @@ class GeneratorInfoWidget(ttk.Frame):
             if not self.winfo_exists():
                 break
             try:
-                settings_dict = self.master.master.inputs
+                settings_dict = self.master.master.inputs  # type: ignore
                 num_players = len(settings_dict['vanilla_nations'].get()) + len(settings_dict['custom_nations'].custom_nation_list) + len(settings_dict['custom_nations'].generic_nation_list)
                 if num_players == 0:
                     num_players = 1

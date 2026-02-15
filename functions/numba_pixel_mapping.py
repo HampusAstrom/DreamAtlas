@@ -23,11 +23,11 @@ def euclidean_2d(v):
 
 
 @njit(parallel=True, cache=True, fastmath=True)
-def _jump_flood_algorithm(pixel_matrix: np.array,
-                          noise_matrix: np.array,
+def _jump_flood_algorithm(pixel_matrix: np.ndarray,
+                          noise_matrix: np.ndarray,
                           step_size: int,
-                          distance_matrix: np.array,
-                          vector_matrix: np.array):
+                          distance_matrix: np.ndarray,
+                          vector_matrix: np.ndarray):
 
     shape_x, shape_y = np.shape(pixel_matrix)
 
@@ -81,9 +81,9 @@ def _jump_flood_algorithm(pixel_matrix: np.array,
     return ping_matrix, ping_distance_matrix, ping_vector_matrix
 
 
-def find_pixel_ownership(coordinates_array: np.array,
-                         map_size: np.array,
-                         noise_array: np.array = np.array,
+def find_pixel_ownership(coordinates_array: np.ndarray,
+                         map_size: np.ndarray,
+                         noise_array: np.ndarray = np.array,
                          scale_down: int = 2):
     # Runs a jump flood algorithm on a scaled down version of the map, then scales up and redoes the algorithm more
     # finely. This speeds up runtime significantly. The main function of the JFA is run in Numba, which speeds up the
@@ -131,9 +131,9 @@ def find_pixel_ownership(coordinates_array: np.array,
     return final_matrix
 
 
-def find_subnodal_pixel_ownership(coordinates_array: np.array,
-                                  map_size: np.array,
-                                  noise_array: np.array = np.array,
+def find_subnodal_pixel_ownership(coordinates_array: np.ndarray,
+                                  map_size: np.ndarray,
+                                  noise_array: np.ndarray = np.array,
                                   scale_down: int = 4):
     # Runs a jump flood algorithm on a scaled down version of the map, then scales up and redoes the algorithm more
     # finely. This speeds up runtime significantly. The main function of the JFA is run in Numba, which speeds up the

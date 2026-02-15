@@ -2,7 +2,7 @@
 class Connection:
 
     def __init__(self,
-                 connected_provinces: set = None,
+                 connected_provinces: set,
                  connection_int: int = 0):
 
         # Graph data
