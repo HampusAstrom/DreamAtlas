@@ -167,13 +167,13 @@ class Region:
 
         # Plotting the contourf and the province border contour map
         levels = len(self.graph)
-        ax_graph.imshow(z_graph, cmap=cm.Set1)
+        ax_graph.imshow(z_graph, cmap='Set1')
         ax_graph.contour(z_graph, levels=levels, colors=['white', ])
         ax_graph.set_title('Provinces')
-        ax_terrain.imshow(z_terrain, vmin=-200, vmax=600, cmap=cm.terrain)
+        ax_terrain.imshow(z_terrain, vmin=-200, vmax=600, cmap='terrain')
         ax_terrain.contour(z_graph, levels=levels, colors=['white', ])
         ax_terrain.set_title('Terrain')
-        ax_population.imshow(z_population, vmin=0, vmax=45000, cmap=cm.YlGn)
+        ax_population.imshow(z_population, vmin=0, vmax=45000, cmap='YlGn')
         ax_population.contour(z_graph, levels=levels, colors=['white', ])
         ax_population.set_title('Population')
         fig.suptitle('%s Region' % self.name)
