@@ -13,6 +13,25 @@ from DreamAtlas.classes import DreamAtlasSettings
 class TestVanillaNationWidgetInitialization:
     """Regression: VanillaNationWidget options/variables/teams were None, causing subscripting errors"""
 
+    def test_widget_direct_instantiation(self):
+        import tkinter as tk
+        root = tk.Tk()
+        from DreamAtlas.GUI.widgets import VanillaNationWidget
+        widget = VanillaNationWidget(root)
+        assert widget is not None
+        assert hasattr(widget, 'options')
+        assert isinstance(widget.options, dict)
+        root.destroy()
+
+    def test_widget_options_assignment(self):
+        import tkinter as tk
+        root = tk.Tk()
+        from DreamAtlas.GUI.widgets import VanillaNationWidget
+        widget = VanillaNationWidget(root)
+        widget.options['test'] = 123
+        assert widget.options['test'] == 123
+        root.destroy()
+
     def test_options_initialized_as_dict(self):
         """VanillaNationWidget.options should be dict, not None"""
         # We can't fully instantiate without tkinter, but we can check the logic
