@@ -143,7 +143,7 @@ def attractor_adjustment(graph: dict,
                          coordinates: dict,
                          darts: dict,
                          node_2_index: dict,
-                         map_size: tuple[int, int],
+                         map_size: np.ndarray,
                          damping_ratio: float,
                          iterations: int):
 

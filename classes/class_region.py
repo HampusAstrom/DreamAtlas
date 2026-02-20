@@ -2,6 +2,7 @@ import numpy as np
 import random as rd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from abc import ABC, abstractmethod
 
 from .class_province import Province
 from .class_settings import DreamAtlasSettings
@@ -20,7 +21,7 @@ from DreamAtlas.databases.dreamatlas_data import (
 )
 
 
-class Region:
+class Region(ABC):
 
     def __init__(self,
                  index: int,
@@ -39,13 +40,22 @@ class Region:
 
         self.name = 'testname'
         self.plane = 1
-        self.terrain_pref = None
-        self.layout = None
 
         self.region_size = 1
         self.anchor_connections = 1
 
+        self.terrain_pref: tuple[float, float, float, float, float, float]  # This the terrain preference for provinces in the region used in terrain generation, specific to region types
+        self.layout: tuple[int, float, float]  # This sets what parts of the region are land/sea/cave, specific to region types
+
     def generate_graph(self, seed: int | None = None):
+        """
+        Initializes the province graph for this region.
+        Always call this first. Returns self for chaining.
+        """
+        self._generate_graph(seed)
+        return self
+
+    def _generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 
@@ -60,7 +70,7 @@ class Region:
                 province.coordinates = [0, 0]
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
-                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
+                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])]).tolist()
 
             else:  # Place the remaining extra provinces attached to non-anchor provinces
                 j = rd.choice(range(1, 1 + self.anchor_connections))
@@ -70,13 +80,26 @@ class Region:
 
             self.provinces.append(province)
 
-    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
+    def generate_terrain(self, seed: int | None = None):
+        """
+        Generates terrain for all provinces. Requires generate_graph to have been called.
+        This is the default generate terrain, specific region types differ.
+        Returns self for chaining.
+        """
+        if not self.provinces:
+            raise RuntimeError("Call generate_graph before generate_terrain.")
+        self._generate_terrain(seed)
+        return self
+
+    def _generate_terrain(self, seed: int | None = None):
         dibber(self, seed)
 
         terrain_picks = list()
         wombat_weights = np.ones(len(self.terrain_pref), dtype=np.float32)
         for i in range(self.region_size):
-            pick = rd.choices(TERRAIN_PREF_BITS, weights=wombat_weights*self.terrain_pref, k=1)[0]  # Pick a selection of primary terrains for this region
+            pick = rd.choices(TERRAIN_PREF_BITS,
+                              weights=(wombat_weights*self.terrain_pref).tolist(),
+                              k=1)[0]  # Pick a selection of primary terrains for this region
             terrain_picks.append(pick)
             wombat_weights[TERRAIN_PREF_BITS.index(pick)] *= 0.8
 
@@ -108,10 +131,20 @@ class Region:
 
             province.terrain_int = sum(terrain_set)
 
-    def generate_population(self, seed: int | None = None):  # Generates the population for the region
+    def generate_population(self, seed: int | None = None):
+        """
+        Generates population for all provinces. Requires generate_terrain to have been called.
+        This is the default generate population, specific region types differ.
+        Returns self for chaining.
+        """
+        if not self.provinces or any(not hasattr(p, 'terrain_int') for p in self.provinces):
+            raise RuntimeError("Call generate_terrain before generate_population.")
+        self._generate_population(seed)
+        return self
 
+    def _generate_population(self, seed: int | None = None):
         if self.settings.pop_balancing == 0:  # No population balancing
-            return
+            return self
         elif self.settings.pop_balancing == 2:  # Re-seed with same seed for all regions in this case
             seed = self.settings.seed
         dibber(self, seed)
@@ -128,15 +161,37 @@ class Region:
 
     def embed_region(self,
                      global_coordinates: list,
-                     scale: list[list[int, int]],
-                     map_size: list[list[int, int]],
-                     seed: int | None = None):  # Embeds the region in a global space
+                     scale: list[tuple[int, int]],
+                     map_size: list[tuple[int, int]],
+                     seed: int | None = None):
+        """
+        Embeds the region in a global space. Requires generate_population to have been called.
+        Returns self for chaining.
+        """
+        if not self.provinces or any(getattr(p, 'population', None) is None for p in self.provinces):
+            raise RuntimeError("Call generate_population before embed_region.")
         dibber(self, seed)
 
-        plane_scale = map_size[self.plane] / map_size[1]
+        # Convert map_size and scale to np.ndarray for math
+        map_size_arr = [np.array(ms) for ms in map_size]
+        scale_arr = [np.array(s) for s in scale]
+        plane_scale = map_size_arr[self.plane] / map_size_arr[1]
         for province in self.provinces:
-            province.coordinates = np.mod(plane_scale * (global_coordinates + scale[self.plane] * province.coordinates), map_size[self.plane], dtype=np.float32, casting='unsafe')
+            coords = plane_scale * (np.array(global_coordinates) + scale_arr[self.plane] * np.array(province.coordinates))
+            province.coordinates = np.mod(coords, map_size_arr[self.plane]).astype(np.float32).tolist()
             province.size, province.shape = find_shape_size(province, self.settings)
+        return self
+
+    def initialize_all(self, global_coordinates, scale, map_size, seed=None):
+        """
+        Convenience method: runs the full initialization sequence for a region.
+        Calls generate_graph, generate_terrain, generate_population, embed_region in order.
+        Returns self for chaining.
+        """
+        return (self.generate_graph(seed)
+                    .generate_terrain(seed)
+                    .generate_population(seed)
+                    .embed_region(global_coordinates, scale, map_size, seed))
 
     def plot(self):
 
@@ -155,7 +210,8 @@ class Region:
             x, y = province.coordinates
             points.append([index, x, y])
 
-        pixel_map = find_pixel_ownership(points, plot_size, hwrap=False, vwrap=False, scale_down=8, minkowski_dist=3)
+        coords_array = np.array([[x, y] for _, x, y in points])
+        pixel_map = find_pixel_ownership(coords_array, np.array(plot_size), scale_down=8)
         for x in range(plot_size[0]):
             for y in range(plot_size[1]):
                 this_index = pixel_map[x][y]
@@ -201,7 +257,7 @@ class HomelandRegion(Region):
         self.anchor_connections = self.settings.cap_connections
         self.name = nation.name
 
-    def generate_graph(self, seed: int | None = None):
+    def _generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 
@@ -214,11 +270,12 @@ class HomelandRegion(Region):
             if i == 0:  # Generating the anchor province
                 province.coordinates = [0, 0]
                 province.capital_location = True
-                if type(self.nation) is not GenericNation:
-                    province.special_capital = self.nation.index
+                # sets non-existing variable, and never uses is, TODO remove when confirmed not needed
+                # if type(self.nation) is not GenericNation:
+                #     province.special_capital = self.nation.index
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
-                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
+                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])]).tolist()
                 province.capital_circle = True
 
             else:  # Place the remaining extra provinces attached to non-anchor provinces
@@ -229,13 +286,15 @@ class HomelandRegion(Region):
 
             self.provinces.append(province)
 
-    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
+    def _generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         terrain_picks = list()
         wombat_weights = np.ones(len(self.terrain_pref), dtype=np.float32)
         for i in range(self.region_size):
-            pick = rd.choices(TERRAIN_PREF_BITS, weights=wombat_weights*self.terrain_pref, k=1)[0]  # Pick a selection of primary terrains for this region
+            pick = rd.choices(TERRAIN_PREF_BITS,
+                              weights=(wombat_weights*self.terrain_pref).tolist(),
+                              k=1)[0]  # Pick a selection of primary terrains for this region
             terrain_picks.append(pick)
             wombat_weights[TERRAIN_PREF_BITS.index(pick)] *= 0.8
 
@@ -286,10 +345,10 @@ class ThroneRegion(Region):
     def __init__(self, index: int, settings: DreamAtlasSettings, seed: int | None = None):
         super().__init__(index, settings, seed)
 
-        self.terrain_pref, self.layout = TERRAIN_PREF_BALANCED, LAYOUT_PREF_LAND
+        self.terrain_pref, self.layout = TERRAIN_PREF_BALANCED, tuple(LAYOUT_PREF_LAND)
         self.name = f'Throne {index}'
 
-    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
+    def _generate_terrain(self, seed: int | None = None):
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
@@ -327,14 +386,14 @@ class VastRegion(Region):
         self.terrain = rd.choice(REGION_VAST_INFO)
         self.name = f'Vast {index}'
 
-    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
+    def _generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
             province.terrain_int = self.terrain + 8589934592 + 134217728
 
-    def generate_population(self, seed: int | None = None):
+    def _generate_population(self, seed: int | None = None):
 
         if self.settings.pop_balancing == 0:  # No population balancing
             return
@@ -352,14 +411,14 @@ class BlockerRegion(Region):
         self.blocker = blocker
         self.plane, self.terrain, self.region_size, self.anchor_connections = REGION_BLOCKER_INFO[blocker]
 
-    def generate_terrain(self, seed: int | None = None):  # This is the basic generate terrain, specific region types differ
+    def _generate_terrain(self, seed: int | None = None):
         dibber(self, seed)
 
         for i in range(self.region_size):  # Apply the terrain and land/sea/cave tags to each province
             province = self.provinces[i]
             province.terrain_int = self.terrain
 
-    def generate_population(self, seed: int | None = None):
+    def _generate_population(self, seed: int | None = None):
 
         if self.settings.pop_balancing == 0:  # No population balancing
             return
@@ -383,7 +442,7 @@ class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
         self.anchor_connections = self.settings.cap_connections - 1
         self.name = nation.name
 
-    def generate_graph(self, seed: int | None = None):
+    def _generate_graph(self, seed: int | None = None):
         dibber(self, seed)
         self.provinces = list()
 
@@ -403,7 +462,7 @@ class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
                 province.coordinates = [0, 0]
 
             elif i <= self.anchor_connections:  # Generate the anchor connections, rotating randomly, then adding some small random angle/radius change
-                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])])
+                province.coordinates = np.asarray([np.cos(theta[i-1]), np.sin(theta[i-1])]).tolist()
 
             elif i == self.anchor_connections:  # Generate the first ug connection
                 province.coordinates = [0, 0]
@@ -411,6 +470,6 @@ class KarstRegion(Region):  # Grumble...grumble...hardcoded bs
             else:  # Place the remaining extra provinces attached to non-anchor provinces
                 j = rd.choice(range(1, 1 + self.anchor_connections))
                 phi = theta[j-1] + np.random.uniform(0, 0.5*spread_range)
-                province.coordinates = np.asarray([np.cos(phi), np.sin(phi)])
+                province.coordinates = np.asarray([np.cos(phi), np.sin(phi)]).tolist()
 
             self.provinces.append(province)
