@@ -13,18 +13,21 @@ def embed_region_graph(graph: dict,
     graph_range = range(1, 1 + len(graph))
 
     # Set the graph size to embed (smaller is faster)
-    size = np.array(map_size / scale_down, dtype=np.uint32)
+    # Ensure size is always positive and at least 1
+    size = np.maximum(np.array(map_size) // scale_down, 1).astype(int)
     connections = [[1, 0], [0, 1], [0, -1], [-1, 0]]
 
     # Make the H graph
     target_graph = dict()
     for x in range(size[0]):
         for y in range(size[1]):
-            target_graph[(int(x * scale_down), int(y * scale_down))] = list()
+            target_graph[(x * scale_down, y * scale_down)] = list()
             for connection in connections:
-                x_coord = int(((x + connection[0]) % size[0]) * scale_down)
-                y_coord = int(((y + connection[1]) % size[1]) * scale_down)
-                target_graph[(int(x * scale_down), int(y * scale_down))].append((x_coord, y_coord))
+                x_new = (x + connection[0]) % size[0]
+                y_new = (y + connection[1]) % size[1]
+                x_coord = x_new * scale_down
+                y_coord = y_new * scale_down
+                target_graph[(x * scale_down, y * scale_down)].append((x_coord, y_coord))
 
     target_graph = ntx.Graph(incoming_graph_data=target_graph)
     while True:
