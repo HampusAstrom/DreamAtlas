@@ -22,8 +22,8 @@ def test_region_generate_graph_and_terrain():
     region.generate_graph(seed=123)
     assert len(region.provinces) == 3
     from DreamAtlas.databases.dreamatlas_data import TERRAIN_PREF_BITS
-    region.terrain_pref = [1.0] * len(TERRAIN_PREF_BITS)
-    region.layout = [0.0, 1.0, 0.5]
+    region.terrain_pref = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    region.layout = (0, 1.0, 0.5)
     region.generate_terrain(seed=123)
     for province in region.provinces:
         assert hasattr(province, 'terrain_int')
@@ -36,8 +36,8 @@ def test_region_generate_population():
     region.anchor_connections = 1
     region.generate_graph(seed=123)
     from DreamAtlas.databases.dreamatlas_data import TERRAIN_PREF_BITS
-    region.terrain_pref = [1.0] * len(TERRAIN_PREF_BITS)
-    region.layout = [0.0, 1.0, 0.5]
+    region.terrain_pref = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    region.layout = (0, 1.0, 0.5)
     region.generate_terrain(seed=123)
     region.generate_population(seed=123)
     for province in region.provinces:
@@ -50,13 +50,13 @@ def test_region_embed_region():
     region.anchor_connections = 1
     region.generate_graph(seed=123)
     from DreamAtlas.databases.dreamatlas_data import TERRAIN_PREF_BITS
-    region.terrain_pref = [1.0] * len(TERRAIN_PREF_BITS)
-    region.layout = [0.0, 1.0, 0.5]
+    region.terrain_pref = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    region.layout = (0, 1.0, 0.5)
     region.generate_terrain(seed=123)
     region.generate_population(seed=123)
     global_coordinates = [10, 10]
-    scale = [[1, 1], [1, 1], [1, 1]]
-    map_size = [[100, 100], [100, 100], [100, 100]]
+    scale = [(1, 1), (1, 1), (1, 1)]
+    map_size = [(100, 100), (100, 100), (100, 100)]
     region.embed_region(global_coordinates, scale, map_size, seed=123)
     for province in region.provinces:
         assert hasattr(province, 'coordinates')
