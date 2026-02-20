@@ -130,9 +130,9 @@ class DreamAtlasGraph:
     def __init__(self, size, map_size, wraparound):
 
         self.size = size
-        self.graph = np.zeros((size, size), dtype=np.bool_)
+        self.graph = np.zeros((size, size), dtype=np.bool_) # graph[i,j] is True if nodes i,j are connected
         self.coordinates = np.zeros((size, 2), dtype=np.int32)
-        self.darts = np.zeros((size, size, 2), dtype=np.int8)
+        self.darts = np.zeros((size, size, 2), dtype=np.int8) # darts[i,j,:] holds the unit vector pointing from i to j
         self.weights = np.ones(size, dtype=np.float32)
         self.planes = np.ones(size, dtype=np.int8)
         self.map_size = map_size
@@ -411,7 +411,7 @@ class DreamAtlasGraph:
                 self.index_2_iid[node] = i
 
     def make_delaunay_graph(self, planes=[1, 2]):
-
+        """Generates darts, edges, and connections based on self.coordinates."""
         self.graph = np.zeros((self.size, self.size), dtype=np.bool_)
         self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)
 

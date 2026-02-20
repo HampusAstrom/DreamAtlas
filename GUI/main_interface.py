@@ -458,7 +458,7 @@ def run_interface():
     app.place_window_center()
     app.rowconfigure(0, weight=1)
     app.columnconfigure(0, weight=1)
-    app.state('zoomed')
+    app.state('normal')
 
     def _config():
         x = 1

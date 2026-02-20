@@ -104,6 +104,7 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
         new_region.generate_population()
         new_region.embed_region(global_coordinates=layout.region_graph.coordinates[i], scale=map_class.scale, map_size=map_class.map_size)
 
+        # Updates info about provinces
         for province in new_region.provinces:
             province.index = province_index[new_region.plane]
             province_list[new_region.plane].append(province)

@@ -63,16 +63,16 @@ class DominionsLayout:
 
         self.region_planes = dict()
         self.region_types = dict()
-        r = 0
+        region_idx = 0
 
         # Add Homeland regions
         for i, nation in enumerate(nation_list):
             for j in initial_graph[i+1]:
                 self.region_graph.connect_nodes(i, j-1)
             self.region_graph.planes[i] = nation.home_plane
-            self.region_planes[r] = nation.home_plane
-            self.region_types[r] = 0
-            r += 1
+            self.region_planes[region_idx] = nation.home_plane
+            self.region_types[region_idx] = 0
+            region_idx += 1
 
         weights = dict()
         for i in range(len(nation_list)):
@@ -111,10 +111,10 @@ class DominionsLayout:
         for i, j in self.region_graph.get_all_connections():
             if (j, i) not in done_edges:
                 done_edges.add((i, j))
-                self.region_graph.insert_connection(i, j, r)
-                self.region_planes[r] = 1
-                self.region_types[r] = 1
-                r += 1
+                self.region_graph.insert_connection(i, j, region_idx)
+                self.region_planes[region_idx] = 1
+                self.region_types[region_idx] = 1
+                region_idx += 1
 
         faces, centroids = self.region_graph.get_faces_centroids()
 
@@ -144,11 +144,11 @@ class DominionsLayout:
                 centroids.remove(best_centroid)
                 faces.remove(face)
 
-                self.region_graph.insert_face(face, r, best_centroid)
-                self.region_planes[r] = 1 if region_name != 'cave' else 2
-                self.region_graph.planes[r] = self.region_planes[r]
-                self.region_types[r] = region_type
-                r += 1
+                self.region_graph.insert_face(face, region_idx, best_centroid)
+                self.region_planes[region_idx] = 1 if region_name != 'cave' else 2
+                self.region_graph.planes[region_idx] = self.region_planes[region_idx]
+                self.region_types[region_idx] = region_type
+                region_idx += 1
 
             if extras:
                 extras = False
@@ -166,51 +166,51 @@ class DominionsLayout:
                     centroids.remove(best_centroid)
                     faces.remove(face)
 
-                    self.region_graph.insert_face(face, r, best_centroid)
-                    self.region_planes[r] = 1 if region_name != 'cave' else 2
-                    self.region_graph.planes[r] = self.region_planes[r]
-                    self.region_types[r] = region_type
-                    r += 1
+                    self.region_graph.insert_face(face, region_idx, best_centroid)
+                    self.region_planes[region_idx] = 1 if region_name != 'cave' else 2
+                    self.region_graph.planes[region_idx] = self.region_planes[region_idx]
+                    self.region_types[region_idx] = region_type
+                    region_idx += 1
 
         # Add Blocker regions - mountain blocker regions go into non-triangular surface faces then cave walls between cave regions
         # faces, centroids = self.region_graph.get_faces_centroids(planes=[1])
         faces = set()
         for i, face in enumerate(faces):
             if len(face) > 3:
-                self.region_graph.insert_face(face, r, centroids[i])
-                self.region_planes[r] = 1
-                self.region_graph.planes[r] = self.region_planes[r]
-                self.region_types[r] = 6
-                r += 1
+                self.region_graph.insert_face(face, region_idx, centroids[i])
+                self.region_planes[region_idx] = 1
+                self.region_graph.planes[region_idx] = self.region_planes[region_idx]
+                self.region_types[region_idx] = 6
+                region_idx += 1
 
         edges, coordinates, darts = self.region_graph.get_small_delaunay(planes=[2])
         for i, edge in enumerate(edges):
             self.region_graph.graph[edge[0], edge[1]] = 0
             self.region_graph.graph[edge[1], edge[0]] = 0
-            self.region_graph.graph[edge[0], r] = 1
-            self.region_graph.graph[edge[1], r] = 1
-            self.region_graph.graph[r, edge[1]] = 1
-            self.region_graph.graph[r, edge[0]] = 1
-            self.region_graph.coordinates[r] = coordinates[i]
-            self.region_graph.darts[edge[0], r] = -darts[i][0]
-            self.region_graph.darts[edge[1], r] = -darts[i][1]
-            self.region_graph.darts[r, edge[1]] = darts[i][1]
-            self.region_graph.darts[r, edge[0]] = darts[i][0]
+            self.region_graph.graph[edge[0], region_idx] = 1
+            self.region_graph.graph[edge[1], region_idx] = 1
+            self.region_graph.graph[region_idx, edge[1]] = 1
+            self.region_graph.graph[region_idx, edge[0]] = 1
+            self.region_graph.coordinates[region_idx] = coordinates[i]
+            self.region_graph.darts[edge[0], region_idx] = -darts[i][0]
+            self.region_graph.darts[edge[1], region_idx] = -darts[i][1]
+            self.region_graph.darts[region_idx, edge[1]] = darts[i][1]
+            self.region_graph.darts[region_idx, edge[0]] = darts[i][0]
 
-            self.region_planes[r] = 2
-            self.region_graph.planes[r] = self.region_planes[r]
-            self.region_types[r] = 8
-            r += 1
+            self.region_planes[region_idx] = 2
+            self.region_graph.planes[region_idx] = self.region_planes[region_idx]
+            self.region_types[region_idx] = 8
+            region_idx += 1
 
         self.region_graph.lloyd_relaxation(iterations=3)
         self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
         faces, centroids = self.region_graph.get_faces_centroids(planes=[2])
         for i, face in enumerate(faces):
-            self.region_graph.insert_face(face, r, centroids[i])
-            self.region_planes[r] = 2
-            self.region_graph.planes[r] = self.region_planes[r]
-            self.region_types[r] = 8
-            r += 1
+            self.region_graph.insert_face(face, region_idx, centroids[i])
+            self.region_planes[region_idx] = 2
+            self.region_graph.planes[region_idx] = self.region_planes[region_idx]
+            self.region_types[region_idx] = 8
+            region_idx += 1
         self.region_graph.spring_adjustment(ratios=np.array((0.01, 0.8, 100), dtype=np.float32), iterations=3000)
 
     def generate_province_layout(self,
