@@ -240,10 +240,12 @@ PIXELS_PER_PROVINCE = 53000
 DATASET_GRAPHS = [[[] for i in range(7)] for d in range(41)]
 AVAILABLE_GRAPHS = np.zeros((41, 7), dtype=np.int8)
 vertex, graph_dict = 0, dict()
+degree = None
 with open(ROOT_DIR / 'databases/expanded_graphs', 'r') as f:
     for line in f.readlines():
         data = line.split()
         if not data:
+            assert degree is not None, "Degree must be assigned before using it. Malformed expanded_graphs file."
             DATASET_GRAPHS[vertex][degree].append(graph_dict)
             AVAILABLE_GRAPHS[vertex, degree] = 1
             vertex = 0

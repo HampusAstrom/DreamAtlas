@@ -306,6 +306,8 @@ class DreamAtlasGraph:
         h_graph = ntx.Graph(incoming_graph_data=h_dict)  # H graph
         s_graph = ntx.Graph(incoming_graph_data=s_graph)  # S graph
 
+        worked = False
+        initial_embedding = None
         for i in range(10):
             initial_embedding, worked = mnm.find_embedding(s_graph, h_graph, return_overlap=True, random_seed=seed)
             if worked:
@@ -313,8 +315,8 @@ class DreamAtlasGraph:
             else:
                 seed = rd.randint(0, 100000)
                 print('\033[31mEmbedding failed: Trying with new seed (%i)\x1b[0m' % seed)
-        if not worked:
-            raise Exception('EmbeddingError: Failed 10 times')
+        assert worked, 'EmbeddingError: Failed 10 times'
+        assert initial_embedding is not None, 'initial_embedding must be assigned if embedding worked'
 
         # Form the subgraph of the target graph
         subgraph_nodes, node_2_r, node_2_a, counter = list(), dict(), dict(), 0
@@ -393,6 +395,8 @@ class DreamAtlasGraph:
             for j, k in list(zip(team, team[1:])):
                 teams_graph.add_edge(j, k)
 
+        worked = False
+        initial_embedding = None
         for i in range(10):
             initial_embedding, worked = mnm.find_embedding(teams_graph, target_graph, return_overlap=True, random_seed=seed)
             if worked:
@@ -400,8 +404,8 @@ class DreamAtlasGraph:
             else:
                 seed = rd.randint(0, 100000)
                 print('\033[31mDisciples embedding failed: Trying with new seed (%i)\x1b[0m' % seed)
-        if not worked:
-            raise Exception('DiscipleEmbeddingError: Failed 10 times')
+        assert worked, 'DiscipleEmbeddingError: Failed 10 times'
+        assert initial_embedding is not None, 'initial_embedding must be assigned if embedding worked'
 
         for i in nations:  # Assign the players to the graphs to be tracked later
             for node in initial_embedding[i]:
@@ -502,22 +506,26 @@ class DreamAtlasGraph:
                 print(f'GraphError: Failed to find 2 shared nodes for {i}-{j}, found {len(shared_nodes)} instead')
                 continue
             elif len(shared_nodes) == 3:  # Tetrahedron case
+                k = None
                 for node in shared_nodes:
                     shared = 0
                     for other_node in shared_nodes:
                         shared += self.graph[node, other_node]
                     if shared == 0:
                         k = node
-
+                assert k is not None, f'Failed to assign k for tetrahedron case in shared_nodes={shared_nodes}'
                 min_dist = np.inf
+                l = None
                 for other_node in shared_nodes:
                     if other_node != k:
                         dist = self.get_raw_dist(k, other_node)
                         if dist < min_dist:
                             min_dist = dist
                             l = other_node
+                assert l is not None, f'Failed to assign l for tetrahedron case in shared_nodes={shared_nodes}'
             else:
                 k, l = shared_nodes[0:2]
+                assert k is not None and l is not None, f'Failed to assign k, l for shared_nodes {shared_nodes}'
 
             alpha = np.arccos(np.dot(self.get_unit_vector(i, k), self.get_unit_vector(j, k)))
             gamma = np.arccos(np.dot(self.get_unit_vector(i, l), self.get_unit_vector(j, l)))
