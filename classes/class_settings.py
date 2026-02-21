@@ -3,26 +3,30 @@ class DreamAtlasSettings:
 
     def __init__(self, index: int):  # DreamAtlas generator settings
 
+        # for now we use type: ignore for all these attributes, since they are
+        # initialized as None and then set to int or list values before they
+        # are used. This is a bit hacky but it allows us to have a clean
+        # __init__ method without needing to set default values for all attributes.
         self.index = index
         self.seed: int = 0
         self.description: str = 'DreamAtlas map'
-        self.map_title: str = None
+        self.map_title: str = None  # type: ignore
 
-        self.homeland_size: int = None
-        self.cap_connections: int = None
-        self.player_neighbours: int = None
-        self.periphery_size: int = None
-        self.throne_region_num: int = None
-        self.water_region_type: int = None
-        self.water_region_num: int = None
-        self.cave_region_type: int = None
-        self.cave_region_num: int = None
-        self.vast_region_num: int = None
+        self.homeland_size: int = None  # type: ignore
+        self.cap_connections: int = None  # type: ignore
+        self.player_neighbours: int = None  # type: ignore
+        self.periphery_size: int = None  # type: ignore
+        self.throne_region_num: int = None  # type: ignore
+        self.water_region_type: int = None  # type: ignore
+        self.water_region_num: int = None  # type: ignore
+        self.cave_region_type: int = None  # type: ignore
+        self.cave_region_num: int = None  # type: ignore
+        self.vast_region_num: int = None  # type: ignore
 
-        self.art_style: int = None
-        self.wraparound: int = None
-        self.pop_balancing: int = None
-        self.site_frequency: int = None
+        self.art_style: int = None  # type: ignore
+        self.wraparound: int = None  # type: ignore
+        self.pop_balancing: int = None  # type: ignore
+        self.site_frequency: int = None  # type: ignore
         self.vanilla_nations: list = list()
         self.custom_nations: list = list()
         self.generic_nations: list = list()
