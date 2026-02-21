@@ -135,12 +135,16 @@ class DominionsLayout:
 
             for coordinate in codebook:
                 closest_distance = np.inf
+                best_centroid = None
+                face = None
                 for j, centroid in enumerate(centroids):
                     distance = np.linalg.norm(np.subtract(centroid, coordinate))
                     if distance < closest_distance:
                         best_centroid = centroid
                         closest_distance = distance
                         face = faces[j]
+                assert best_centroid is not None, f"No best_centroid found for coordinate {coordinate}"
+                assert face is not None, f"No face found for coordinate {coordinate}"
                 centroids.remove(best_centroid)
                 faces.remove(face)
 
@@ -157,12 +161,16 @@ class DominionsLayout:
 
                 for coordinate in codebook:
                     closest_distance = np.inf
+                    best_centroid = None
+                    face = None
                     for j, centroid in enumerate(centroids):
                         distance = np.linalg.norm(np.subtract(centroid, coordinate))
                         if distance < closest_distance:
                             best_centroid = centroid
                             closest_distance = distance
                             face = faces[j]
+                    assert best_centroid is not None, f"No best_centroid found for coordinate {coordinate} (extras)"
+                    assert face is not None, f"No face found for coordinate {coordinate} (extras)"
                     centroids.remove(best_centroid)
                     faces.remove(face)
 
@@ -258,8 +266,8 @@ class DominionsLayout:
             if (j, i) not in done_edges:
                 done_edges.add((i, j))
 
+                choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
                 for province in [index_2_prov[i+1], index_2_prov[j+1]]:
-                    choice = int(rd.choices(SPECIAL_NEIGHBOUR, NEIGHBOUR_SPECIAL_WEIGHTS)[0][0])
                     terrain = province.terrain_int
                     if province.capital_location:  # Ignore caps
                         choice = 0
@@ -323,9 +331,11 @@ class DominionsLayout:
 
                     i_provinces = rd.sample(i_region.provinces[start:], k=gates_num)
                     for j, j_region in enumerate(possible_j_regions[0:gates_num]):
+                        j_province = None
                         for province in j_region.provinces:
                             if not province.has_gate:
                                 j_province = province
+                        assert j_province is not None, f"No j_province found for region {j_region}"
                         j_province.has_gate = True
                         self.gates[1].append([j_province.index, gate])
                         self.gates[2].append([i_provinces[j].index, gate])
