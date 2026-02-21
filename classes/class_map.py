@@ -284,11 +284,13 @@ class DominionsMap:
 
             for i, j in province_graph.get_all_connections():
                 min_dist = np.inf
+                best_dart = None
                 for n in self.wraparound:
                     dist = province_graph.get_length(i, j)
                     if dist < min_dist:
                         best_dart = n
                         min_dist = dist
+                assert best_dart is not None, f"No valid dart found for connection ({i}, {j})"
                 province_graph.darts[i-1] = best_dart
 
     def load_folder(self, folderpath: str):
