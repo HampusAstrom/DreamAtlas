@@ -288,7 +288,7 @@ class DominionsLayout:
 
                 self.connections[plane].append(Connection(connected_provinces={i+1, j+1}, connection_int=choice))
 
-        self.min_dist[plane] = float(graph.get_min_dist())
+        self.min_dist[plane] = graph.get_min_dist()
 
     def generate_gates(self, region_list, seed: int | None = None):
         """Generate gates between regions. Requires generate_region_layout() to be called first."""

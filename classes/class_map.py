@@ -292,7 +292,7 @@ class DominionsMap:
                 province_graph.darts[i-1] = best_dart
 
     def load_folder(self, folderpath: str):
-        plane_image_types = [None for _ in range(10)]
+        plane_image_types: list[str | None] = [None for _ in range(10)]
         if os.path.isdir(folderpath):  # parse files in directory, try to load all the files in
             for dirpath, dirnames, filenames in os.walk(folderpath):
                 for file in filenames:
@@ -301,7 +301,8 @@ class DominionsMap:
                         for i in range(2, 9):
                             if file[0:-4].endswith('_plane%i' % i):
                                 plane = i
-                        self.planes.add(plane)
+                        if plane not in self.planes:
+                            self.planes.append(plane)
                         self.load_file(os.path.join(dirpath, file), plane=plane)
 
                         if file[-4:] in ['.d6m', '.tga']:
@@ -525,22 +526,23 @@ class DominionsMap:
             plane_axs[0].imshow(plane_general, cmap='Pastel1')
             layout = self.layout
             assert layout is not None, "self.layout must not be None for plotting operations."
-            assert hasattr(layout, 'graph'), "self.layout must have a 'graph' attribute."
-            graph = layout.graph
-            plane_axs[0].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
-            assert hasattr(layout, 'region_graph'), "self.layout must have a 'region_graph' attribute."
+            graph = layout.province_graphs[plane]
+            assert graph is not None, "province_graphs[plane] must not be None for plotting."
+            levels = np.unique(plane_general)
+            plane_axs[0].contour(plane_general, levels=levels, colors=['white', ])
             region_graph = layout.region_graph
-            plane_axs[1].imshow(plane_regions, vmin=1, vmax=len(region_graph), cmap='tab20')
-            plane_axs[1].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
+            assert region_graph is not None, "region_graph must not be None for plotting."
+            plane_axs[1].imshow(plane_regions, vmin=1, vmax=region_graph.size, cmap='tab20')
+            plane_axs[1].contour(plane_general, levels=levels, colors=['white', ])
             plane_axs[2].imshow(plane_terrain, vmin=-200, vmax=600, cmap='terrain')
-            plane_axs[2].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
+            plane_axs[2].contour(plane_general, levels=levels, colors=['white', ])
             plane_axs[3].imshow(plane_population, cmap='YlGn')
-            plane_axs[3].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
+            plane_axs[3].contour(plane_general, levels=levels, colors=['white', ])
 
-            assert hasattr(layout, 'coordinates') and hasattr(layout, 'darts'), "self.layout must have 'coordinates' and 'darts' attributes."
-            coordinates = layout.coordinates
-            darts = layout.darts
-            virtual_graph, virtual_coordinates = make_virtual_graph(graph[plane], coordinates[plane], darts[plane], self.map_size[plane])
+            # If coordinates and darts are needed, fetch from graph
+            coordinates = graph.coordinates
+            darts = graph.darts
+            virtual_graph, virtual_coordinates = make_virtual_graph(graph.graph, coordinates, darts, self.map_size[plane])
             for i in virtual_graph:
                 x0, y0 = virtual_coordinates[i]
                 for j in virtual_graph[i]:
