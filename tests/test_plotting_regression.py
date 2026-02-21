@@ -41,18 +41,27 @@ def test_pixel_map_none_access_tga():
 
 class DummyLayout:
     def __init__(self):
-        # Mirror the structure expected by make_virtual_graph and class_map.py
-        # graph: dict of plane -> dict of node -> list of neighbors
-        # coordinates: dict of plane -> dict of node -> coordinate (2D)
-        # darts: dict of plane -> dict of node -> list of dart vectors (2D)
-        self.graph = {0: {0: [1, 2], 1: [0, 2], 2: [0, 1]}}
-        self.coordinates = {0: {0: np.array([0, 0]), 1: np.array([1, 0]), 2: np.array([0, 1])}}
-        self.darts = {0: {0: [np.array([0, 0]), np.array([0, 0])],
-                          1: [np.array([0, 0]), np.array([0, 0])],
-                          2: [np.array([0, 0]), np.array([0, 0])]}}
-        self.province_graphs = {0: DummyProvinceGraph()}
-        self.region_graph = [1, 2]
-        self.levels = [1]  # Add levels for contour
+        # Use a real DreamAtlasGraph for province_graphs to match DominionsMap.plot expectations
+        from DreamAtlas.classes.graph import DreamAtlasGraph
+        size = 3
+        map_size = (3, 3)
+        wraparound = [(0, 0)]
+        dag = DreamAtlasGraph(size=size, map_size=map_size, wraparound=wraparound)
+        # Connect nodes in a triangle for simplicity
+        dag.graph[0, 1] = dag.graph[1, 0] = True
+        dag.graph[1, 2] = dag.graph[2, 1] = True
+        dag.graph[2, 0] = dag.graph[0, 2] = True
+        dag.coordinates[0] = [0, 0]
+        dag.coordinates[1] = [1, 0]
+        dag.coordinates[2] = [0, 1]
+        dag.darts[0, 1] = [1, 0]
+        dag.darts[1, 2] = [0, 1]
+        dag.darts[2, 0] = [-1, -1]
+        self.province_graphs = [dag] + [None]*9
+        # Use a simple region_graph with a .size attribute
+        class DummyRegionGraph:
+            size = 2
+        self.region_graph = DummyRegionGraph()
 
 class DummyProvinceGraph:
     def get_all_connections(self):

@@ -169,7 +169,7 @@ class DreamAtlasGraph:
             dist = self.get_length(i, j)
             if dist < min_dist:
                 min_dist = dist
-        return min_dist
+        return float(min_dist)
 
     def get_closest_dart(self, i, j):  # Returns the shortest dart from i to j
 
