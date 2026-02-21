@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from abc import ABC, abstractmethod
 
+from DreamAtlas.functions.noise_utils import make_noise_array
+
 from .class_province import Province
 from .class_settings import DreamAtlasSettings
 from .class_nation import GenericNation, Nation
@@ -194,7 +196,6 @@ class Region(ABC):
                     .embed_region(global_coordinates, scale, map_size, seed))
 
     def plot(self):
-
         # Making the figures (graph, terrain, population)
         fig, axs = plt.subplots(1, 3)
         ax_graph, ax_terrain, ax_population = axs
@@ -211,7 +212,9 @@ class Region(ABC):
             points.append([index, x, y])
 
         coords_array = np.array([[x, y] for _, x, y in points])
-        pixel_map = find_pixel_ownership(coords_array, np.array(plot_size), scale_down=8)
+        # Generate noise array as in production code
+        noise_array = make_noise_array(plot_size, 150)
+        pixel_map = find_pixel_ownership(coords_array, np.array(plot_size), noise_array=noise_array, scale_down=8)
         for x in range(plot_size[0]):
             for y in range(plot_size[1]):
                 this_index = pixel_map[x][y]

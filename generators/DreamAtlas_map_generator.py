@@ -33,6 +33,7 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
     map_class = DominionsMap()
     map_class.map_title = settings.map_title
     map_class.settings, map_class.seed = settings, settings.seed
+    assert map_class.settings is not None, "settings should not be None"
     dibber(map_class, seed)
 
     # Loading nations and making the nation -> graph dict

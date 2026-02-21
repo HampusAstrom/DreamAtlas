@@ -1,27 +1,12 @@
 import numpy as np
 import scipy as sc
-import noise as ns
 from numba import njit, prange
 from DreamAtlas.functions.numba_pixel_mapping import (
     find_pixel_ownership, numba_height_map
 )
 from DreamAtlas.functions import terrain_2_height
 
-
-def make_noise_array(map_size, scale):
-    x_size, y_size = map_size
-    noise_array = np.zeros((x_size, y_size, 2), dtype=np.float32)
-
-    base_x, base_y = np.random.randint(1, 10000, size=2, dtype=np.int32)
-
-    for x in range(map_size[0]):
-        for y in range(map_size[1]):
-            vx, vy = x/x_size, y/y_size
-
-            noise_array[x, y, 0] = ns.snoise2(vx, vy, octaves=7, persistence=0.90, lacunarity=2.0, repeatx=1, repeaty=1, base=base_x)
-            noise_array[x, y, 1] = ns.snoise2(vx, vy, octaves=7, persistence=0.90, lacunarity=2.0, repeatx=1, repeaty=1, base=base_y)
-
-    return noise_array * scale
+from DreamAtlas.functions.noise_utils import make_noise_array
 
 
 @njit(parallel=True, cache=True, fastmath=True)

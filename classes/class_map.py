@@ -223,6 +223,8 @@ class DominionsMap:
         self.layout = DominionsLayout(self)
         for plane in self.planes:
             self.layout.province_graphs[plane] = DreamAtlasGraph(size=len(self.terrain_list[plane]), map_size=self.map_size[plane], wraparound=self.wraparound)
+            province_graph = self.layout.province_graphs[plane]
+            assert province_graph is not None, f"province_graphs[{plane}] must be initialized."
             self.province_list[plane] = list()
 
             height_dict = dict()
@@ -238,7 +240,7 @@ class DominionsMap:
                         self.province_list[plane][-1].population = population
 
             for (i, j) in self.neighbour_list[plane]:
-                self.layout.province_graphs[plane].connect_nodes(i-1, j-1)
+                province_graph.connect_nodes(i-1, j-1)
 
             # TODO: Implement special_neighbours attribute in DominionsLayout
             # for (i, j, c) in self.special_neighbour_list[plane]:
@@ -247,18 +249,23 @@ class DominionsMap:
             if self.pixel_map[plane] is None:
                 self.pixel_map[plane] = fast_pb_2_matrix(self.pixel_owner_list[plane], width=self.map_size[plane][0], height=self.map_size[plane][1])
 
+
             if plane_image_types[plane] == '.d6m':
+                height_map = self.height_map[plane]
+                assert height_map is not None, f"height_map[{plane}] must not be None for .d6m processing."
                 for i, (x, y, spec) in enumerate(self.province_capital_locations[plane]):
-                    self.layout.province_graphs[plane].coordinates[i] = [x, y]
+                    province_graph.coordinates[i] = [x, y]
                     for province in self.province_list[plane]:
                         if province.index == i+1:
                             province.coordinates = [x, y]
-                            province.height = self.height_map[plane][x, y]
+                            province.height = height_map[x, y]
+
 
             elif plane_image_types[plane] == '.tga':
-
                 all_capital_locations = list()
                 pixels = self.image_pil[plane].load()
+                pixel_map = self.pixel_map[plane]
+                assert pixel_map is not None, f"pixel_map[{plane}] must not be None for .tga processing."
                 for x in range(self.map_size[plane][0]):
                     for y in range(self.map_size[plane][1]):
                         yr = self.map_size[plane][1]-y-1
@@ -266,23 +273,23 @@ class DominionsMap:
                             all_capital_locations.append((x, yr))
 
                 for x, y in all_capital_locations:
-                    i = self.pixel_map[plane][x, y]
-                    self.layout.province_graphs[plane].coordinates[i-1] = [x, y]
+                    i = pixel_map[x, y]
+                    province_graph.coordinates[i-1] = [x, y]
                     for province in self.province_list[plane]:
                         if province.index == i:
                             province.coordinates = [x, y]
 
-                self.height_map[plane] = np.vectorize(lambda i: height_dict[i])(self.pixel_map[plane])
-                self.min_dist[plane] = self.layout.province_graphs[plane].get_min_dist()
+                self.height_map[plane] = np.vectorize(lambda i: height_dict[i])(pixel_map)
+                self.min_dist[plane] = province_graph.get_min_dist()
 
-            for i, j in self.layout.province_graphs[plane].get_all_connections():
+            for i, j in province_graph.get_all_connections():
                 min_dist = np.inf
                 for n in self.wraparound:
-                    dist = self.layout.province_graphs[plane].get_length(i, j)
+                    dist = province_graph.get_length(i, j)
                     if dist < min_dist:
                         best_dart = n
                         min_dist = dist
-                self.layout.province_graphs[plane].darts[i-1] = best_dart
+                province_graph.darts[i-1] = best_dart
 
     def load_folder(self, folderpath: str):
         plane_image_types = [None for _ in range(10)]
@@ -433,19 +440,25 @@ class DominionsMap:
                  plane: int,
                  filepath: str):
 
-        with open(filepath, "wb") as f:  # Format is little endian binary which requires data to be converted
 
+        with open(filepath, "wb") as f:  # Format is little endian binary which requires data to be converted
+            min_dist = self.min_dist[plane]
+            assert min_dist is not None, f"min_dist[{plane}] must not be None before writing d6m file."
             f.write(struct.pack("<iiiiqhii", 898933, 3, int(self.map_size[plane][0]), int(self.map_size[plane][1]), 0,  # Write headline map data
-                                int((self.min_dist[plane] % 1.0) * 10000), int(self.min_dist[plane]), int(len(self.province_list[plane]))))
+                                int((min_dist % 1.0) * 10000), int(min_dist), int(len(self.province_list[plane]))))
 
             for province in self.province_list[plane]:  # Write pixel positions of each 'capital' (fort) and the 'spec' (if its deep sea, unknown why this is)
                 x, y = province.coordinates
                 f.write(struct.pack("<hhq", int(x), int(y), province.terrain_int & 2052))
 
-            for height in np.ndarray.flatten(self.height_map[plane], order='F'):  # Write height for each pixel
+            height_map = self.height_map[plane]
+            assert height_map is not None, f"height_map[{plane}] must not be None for flatten operation."
+            for height in np.ndarray.flatten(height_map, order='F'):  # Write height for each pixel
                 f.write(struct.pack("<h", int(height)))
 
-            for owner in np.ndarray.flatten(self.pixel_map[plane], order='F'):  # Write ownership for each pixel
+            pixel_map = self.pixel_map[plane]
+            assert pixel_map is not None, f"pixel_map[{plane}] must not be None for flatten operation."
+            for owner in np.ndarray.flatten(pixel_map, order='F'):  # Write ownership for each pixel
                 f.write(struct.pack("<h", int(owner)))
 
             f.write(struct.pack("<i", 1155))  # Write final 'magic number' (allows dom6.exe to recognise the file)
@@ -500,7 +513,9 @@ class DominionsMap:
                         terrain_dict[province.index] += TERRAIN_2_HEIGHTS_DICT[terrain]
                 population_dict[province.index] = province.population
 
-            plotting_pixel_map = np.transpose(self.pixel_map[plane])
+            pixel_map = self.pixel_map[plane]
+            assert pixel_map is not None, f"pixel_map[{plane}] must not be None for transpose operation."
+            plotting_pixel_map = np.transpose(pixel_map)
             plane_general = np.vectorize(lambda i: index_dict[i])(plotting_pixel_map)
             plane_regions = np.vectorize(lambda i: region_dict[i])(plotting_pixel_map)
             plane_terrain = np.vectorize(lambda i: terrain_dict[i])(plotting_pixel_map)
@@ -508,15 +523,24 @@ class DominionsMap:
 
             # Plotting the contourf and the province border contour map
             plane_axs[0].imshow(plane_general, cmap='Pastel1')
-            plane_axs[0].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
-            plane_axs[1].imshow(plane_regions, vmin=1, vmax=len(self.layout.region_graph), cmap='tab20')
-            plane_axs[1].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+            layout = self.layout
+            assert layout is not None, "self.layout must not be None for plotting operations."
+            assert hasattr(layout, 'graph'), "self.layout must have a 'graph' attribute."
+            graph = layout.graph
+            plane_axs[0].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
+            assert hasattr(layout, 'region_graph'), "self.layout must have a 'region_graph' attribute."
+            region_graph = layout.region_graph
+            plane_axs[1].imshow(plane_regions, vmin=1, vmax=len(region_graph), cmap='tab20')
+            plane_axs[1].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
             plane_axs[2].imshow(plane_terrain, vmin=-200, vmax=600, cmap='terrain')
-            plane_axs[2].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+            plane_axs[2].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
             plane_axs[3].imshow(plane_population, cmap='YlGn')
-            plane_axs[3].contour(plane_general, levels=max(self.layout.graph[plane]), colors=['white', ])
+            plane_axs[3].contour(plane_general, levels=max(graph[plane]), colors=['white', ])
 
-            virtual_graph, virtual_coordinates = make_virtual_graph(self.layout.graph[plane], self.layout.coordinates[plane], self.layout.darts[plane], self.map_size[plane])
+            assert hasattr(layout, 'coordinates') and hasattr(layout, 'darts'), "self.layout must have 'coordinates' and 'darts' attributes."
+            coordinates = layout.coordinates
+            darts = layout.darts
+            virtual_graph, virtual_coordinates = make_virtual_graph(graph[plane], coordinates[plane], darts[plane], self.map_size[plane])
             for i in virtual_graph:
                 x0, y0 = virtual_coordinates[i]
                 for j in virtual_graph[i]:
