@@ -107,7 +107,7 @@ class TestFindShapeSize:
 
     def test_find_shape_size_returns_tuple(self):
         """find_shape_size() should return (size, shape) tuple"""
-        province = Province(index=1)
+        province = Province(index=1, parent_region=None, plane=1)
         province.population = 1000  # Must initialize population
         settings = DreamAtlasSettings(index=0)
 
@@ -118,7 +118,7 @@ class TestFindShapeSize:
 
     def test_find_shape_size_values_are_numeric(self):
         """size and shape should be numeric"""
-        province = Province(index=1)
+        province = Province(index=1, parent_region=None, plane=1)
         province.population = 1000  # Must initialize population
         settings = DreamAtlasSettings(index=0)
 
@@ -129,7 +129,7 @@ class TestFindShapeSize:
 
     def test_find_shape_size_default_province(self):
         """Default province should have valid size and shape"""
-        province = Province(index=1)
+        province = Province(index=1, parent_region=None, plane=1)
         settings = DreamAtlasSettings(index=0)
         settings.pop_balancing = 0  # Disable pop balancing for deterministic result
 
@@ -145,12 +145,12 @@ class TestFindShapeSize:
         settings.pop_balancing = 1  # Enable pop balancing
 
         # Province with low population
-        province_low = Province(index=1)
+        province_low = Province(index=1, parent_region=None, plane=1)
         province_low.population = 100
         size_low, _ = find_shape_size(province_low, settings)
 
         # Province with high population
-        province_high = Province(index=2)
+        province_high = Province(index=2, parent_region=None, plane=1)
         province_high.population = 10000
         size_high, _ = find_shape_size(province_high, settings)
 
@@ -159,7 +159,7 @@ class TestFindShapeSize:
 
     def test_find_shape_size_consistency(self):
         """find_shape_size() should be deterministic for same inputs"""
-        province = Province(index=1)
+        province = Province(index=1, parent_region=None, plane=1)
         province.terrain_int = 16  # Some terrain
         province.population = 1000
 
