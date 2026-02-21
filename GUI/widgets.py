@@ -585,32 +585,33 @@ class GeneratorInfoWidget(ttk.Frame):
                           ['Provinces per player', 'text'],
                           ['Gold per player', 'text']]
 
+        last_index = None
         for i, (text, tooltip) in enumerate(GENERATOR_INFO):
-
             self.labels[i] = ttk.Label(self, text=text)
-
             self.variables[i] = ttk.StringVar()
             self.metrics[i] = ttk.Entry(self,  width=50, textvariable=self.variables[i], justify=CENTER)
-
             ToolTip(self.labels[i], text=tooltip, delay=TOOLTIP_DELAY)
+            last_index = i
 
-        self.labels[i+1] = ttk.Label(self, text='Input Issues?')
-        self.metrics[i+1] = ttk.Entry(self, justify=CENTER, width=100)
-        self.update(2)
+        if last_index is not None:
+            self.labels[last_index+1] = ttk.Label(self, text='Input Issues?')
+            self.metrics[last_index+1] = ttk.Entry(self, justify=CENTER, width=100)
+        self.update_info(2)
 
         self.thread = Thread(target=self.check_values)
         self.thread.daemon = True
         self.thread.start()
 
-    def update(self, cols):
+    def update_info(self, cols):
 
         if self.cols != cols:
-            for i in range(5):
+            last_index = len(self.labels) - 2  # 5 main labels, 1 extra
+            for i in range(last_index+1):
                 self.labels[i].grid(row=i, column=0, sticky=NSEW, pady=2, padx=2)
                 self.metrics[i].grid(row=i, column=1, sticky=NSEW, pady=2, padx=2)
 
-            self.labels[i+1].grid(row=i+1, column=0, sticky=NSEW, pady=2, padx=2)
-            self.metrics[i+1].grid(row=i+1, column=1, sticky=NSEW, pady=2, padx=2)
+            self.labels[last_index+1].grid(row=last_index+1, column=0, sticky=NSEW, pady=2, padx=2)
+            self.metrics[last_index+1].grid(row=last_index+1, column=1, sticky=NSEW, pady=2, padx=2)
             self.columnconfigure(0, weight=1, minsize=150)
             self.columnconfigure(0, weight=1, minsize=200)
 
