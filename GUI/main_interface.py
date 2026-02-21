@@ -56,7 +56,7 @@ class MainInterface(ttk.Frame):
         self.viewing_connections: list | None = None
         self.viewing_nodes: list | None = None
         self.viewing_borders: list | None = None
-        self.icons = None
+        self.icons = []
 
         self.editor_focus: InputWidget | None = None
 
@@ -272,7 +272,7 @@ class MainInterface(ttk.Frame):
             self.viewing_connections = [None]*10
             self.viewing_nodes = [None]*10
             self.viewing_borders = [None]*10
-            self.icons = [None]*10
+            self.icons = [[] for _ in range(10)]
 
             for plane in self.map.planes:  # Create all the PIL objects
                 self.viewing_bitmaps[plane] = list()
@@ -280,7 +280,7 @@ class MainInterface(ttk.Frame):
                 self.viewing_connections[plane] = list()
                 self.viewing_nodes[plane] = list()
                 self.viewing_borders[plane] = list()
-                self.icons[plane] = list()
+                # Already initialized as empty list; no need to reassign
 
                 # Making province border objects (useful for a lot of stuff)
                 for i, (x, y), array in pixel_matrix_2_bitmap_arrays(self.map.pixel_map[plane]):  # Iterating through every province index on this pixel map
@@ -291,15 +291,16 @@ class MainInterface(ttk.Frame):
                     self.viewing_bitmaps[plane].append([i, iid, bitmap])
 
                 # Making art objects
-                if self.map.image_file[plane] is not None:
-                    if self.map.image_file[plane].endswith('.tga'):  # Art layer
-                        image = Image.open(self.map.image_file[plane])
+                image_file = self.map.image_file[plane]
+                if image_file is not None:
+                    if isinstance(image_file, str) and image_file.endswith('.tga'):  # Art layer
+                        image = Image.open(image_file)
                         photoimage = ImageTk.PhotoImage(image)
                         image2 = image.copy()
                         image2.putalpha(170)
                         trans_photoimage = ImageTk.PhotoImage(image2)
                         iid = self.viewing_canvas.create_image(0, 0, anchor=NW, image=photoimage, disabledimage=trans_photoimage, state=HIDDEN, tags=(f'plane{plane}', 'photoimage'))
-                        self.viewing_photoimages[plane] = [self.map.image_file[plane], iid, photoimage, trans_photoimage]
+                        self.viewing_photoimages[plane] = [image_file, iid, photoimage, trans_photoimage]
 
                 # Making borders
                 image = Image.fromarray(np.flip(pixel_matrix_2_borders_array(self.map.pixel_map[plane], thickness=3).transpose(), axis=0), mode='L')
@@ -315,15 +316,17 @@ class MainInterface(ttk.Frame):
                         j = int(j)
 
                         neighbour_col = CONNECTION_COLOURS[0]
+                        connection_obj = None
                         for connection in self.map.connection_list[plane]:
                             if {i+1, j+1} == connection.connected_provinces:
                                 neighbour_col = CONNECTION_COLOURS[connection.connection_int]
+                                connection_obj = connection
                                 break
 
                         if j not in done_nodes:
                             x2, y2 = virtual_coordinates[j]
                             iid = self.viewing_canvas.create_line(x1, self.map.map_size[plane][1]-y1, x2, self.map.map_size[plane][1]-y2, state=HIDDEN, dash=(100, 15), activefill='white', fill=neighbour_col, tags=(f'plane{plane}', f'{(i+1, j+1)}', 'connections', 'clickable'), width=6)  # type: ignore
-                            self.viewing_connections[plane].append([connection, iid])
+                            self.viewing_connections[plane].append([connection_obj, iid])
 
                     if i < self.map.layout.province_graphs[plane].size:  # type: ignore
                         iid = self.viewing_canvas.create_oval(x1-12, self.map.map_size[plane][1]-(y1-12), x1+12, self.map.map_size[plane][1]-(y1+12), state=HIDDEN, activefill='white', fill='red', tags=(f'plane{plane}', f'{i+1}', 'nodes', 'clickable'), width=3)  # type: ignore
