@@ -144,7 +144,7 @@ class DominionsMap:
                     elif line[0] == '#maptextcol':
                         self.map_text_colour[plane] = [float(line[1]), float(line[2]), float(line[3]), float(line[4])]
                     elif line[0] == '#mapdomcol':
-                        self.map_dom_colour[plane] = [int(line[1]), int(line[2]), int(line[3]), int(line[4])]
+                        self.map_dom_colour = [int(line[1]), int(line[2]), int(line[3]), int(line[4])]
                     elif line[0] == '#saildist':
                         self.max_sail_distance[plane] = int(line[1])
                     elif line[0] == '#features':
