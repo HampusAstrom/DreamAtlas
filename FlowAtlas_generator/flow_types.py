@@ -9,6 +9,13 @@ class Connection:
 
 class MapNode:
     '''Used as province capitals in the map graph'''
-    def __init__(self):
-        self.x = 0
-        self.y = 0
+    def __init__(self, x = 0, y = 0):
+        self.x = x
+        self.y = y
+
+class FlowSettings:
+    num_players = 6
+    num_prov_per_player = 15
+    map_size_x = 30000
+    map_size_y = 30000
+    cap_connections = 6
