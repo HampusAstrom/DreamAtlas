@@ -20,16 +20,22 @@ def cleanup_isolated_pixels(pixel_map):
             for y in prange(shape_y):
 
                 isolated = 0
-
+                neighbor_found = False
                 for n in [[1, 0], [0, 1], [-1, 0], [0, -1]]:
                     vx, vy = x + n[0], y + n[1]
                     vx, vy = vx % shape_x, vy % shape_y
-
                     if pixel_map[vx, vy] == pixel_map[x, y]:
                         isolated += 1
-
                 if isolated <= 1:
-                    output_pixel_map[x, y] = pixel_map[vx, vy]
+                    # Find a neighbor with a different value to replace the isolated pixel
+                    for n in [[1, 0], [0, 1], [-1, 0], [0, -1]]:
+                        vx, vy = x + n[0], y + n[1]
+                        vx, vy = vx % shape_x, vy % shape_y
+                        if pixel_map[vx, vy] != pixel_map[x, y]:
+                            output_pixel_map[x, y] = pixel_map[vx, vy]
+                            neighbor_found = True
+                            break
+                    # If all neighbors are the same, leave the value unchanged
 
     return output_pixel_map
 
