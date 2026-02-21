@@ -83,7 +83,8 @@ def embed_region_graph(graph: dict,
                     if node2 in attractor_graph[node1]:
                         dart = attractor_darts[node1][attractor_graph[node1].index(node2)]
                         dart_candidates.append(dart)
-            darts[i].append(dart)
+            assert dart_candidates, f"No dart candidates found for ({i}, {j})"
+            darts[i].append(rd.choice(dart_candidates))
 
     return coordinates, darts
 
