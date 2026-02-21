@@ -119,11 +119,13 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
     special_start_locations = list()    # Generate the special start locations
     for region in region_list[0]:
         if type(region.nation) is not GenericNation:
+            special_start_index = None
             for province in region.provinces:
                 if province.capital_location:
                     special_start_index = province.index
                     if region.plane == 2:   # Curse you Illwinterrr!!!!!!
                         special_start_index += len(province_list[1])
+            assert special_start_index is not None, f"No capital province found for nation {region.nation.index} in region {region}"
             special_start_locations.append([region.nation.index, int(special_start_index)])
 
     map_class.region_list = region_list
@@ -150,14 +152,14 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
                     if not has_terrain(i_province.terrain_int, 68719476736):
                         fail = True
             if not fail:
+                # Move province usage inside the loop
+                special_start_locations.append([499, len(province_list[1]) + province.index])
+                province.has_commands = True
+                province.terrain_int = 4 + 4096 + 67108864
+                province.population = 10000
+                province.size = 2
+                province.shape = 3
                 break
-
-        special_start_locations.append([499, len(province_list[1]) + province.index])
-        province.has_commands = True
-        province.terrain_int = 4 + 4096 + 67108864
-        province.population = 10000
-        province.size = 2
-        province.shape = 3
 
     for plane in map_class.planes:
         province_graph = layout.province_graphs[plane]

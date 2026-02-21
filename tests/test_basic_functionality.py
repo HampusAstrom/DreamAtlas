@@ -87,6 +87,14 @@ def test_generator_full_integration():
     assert result.scale is not None
     assert len(result.region_list[1]) > 0  # At least some homeland regions
 
+    # Omniscience branch assertions
+    settings.omniscience = True
+    result_omni = generator_dreamatlas(settings=settings, ui=None, seed=42)
+    assert result_omni.special_start_locations is not None
+    assert any(loc[0] == 499 for loc in result_omni.special_start_locations)
+    assert len(result_omni.province_list[2]) > 0
+    assert any(getattr(prov, 'has_commands', False) for prov in result_omni.province_list[2])
+
     # Test saving and loading .d6m file
     import tempfile, os
     tmp_dir = tempfile.mkdtemp()
@@ -221,6 +229,9 @@ def test_make_d6m_minimal(tmp_path):
     m.make_d6m(1, str(out_path))
     assert out_path.exists()
     assert out_path.stat().st_size > 0
+
+
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
