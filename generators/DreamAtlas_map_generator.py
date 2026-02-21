@@ -77,16 +77,21 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
     region_list = [[] for _ in range(9)]
     terrain_list = [[] for _ in range(10)]
 
-    for i in layout.region_types:  # Generate all the regions
-        region_type = layout.region_types[i]
+    region_types = layout.region_types
+    region_graph = layout.region_graph
+    assert region_types is not None, "generate_region_layout() must be called first"
+    assert region_graph is not None, "generate_region_layout() must be called first"
+
+    for i in region_types:  # Generate all the regions
+        region_type = region_types[i]
 
         if region_type == 0:  # Generate the homelands
-            new_region = HomelandRegion(index=i, nation=nation_list[layout.region_graph.index_2_iid[i]], settings=settings, seed=map_class.seed)
+            new_region = HomelandRegion(index=i, nation=nation_list[region_graph.index_2_iid[i]], settings=settings, seed=map_class.seed)
         elif region_type == 1:  # Generate the peripherals
             nations = list()
-            for j in layout.region_graph.get_node_connections(i):
+            for j in region_graph.get_node_connections(i):
                 if j < len(nation_list):
-                    nations.append(nation_list[layout.region_graph.index_2_iid[int(j)]])
+                    nations.append(nation_list[region_graph.index_2_iid[int(j)]])
             new_region = PeripheryRegion(index=i, nations=nations, settings=settings, seed=map_class.seed)
         elif region_type == 2:  # Generate the thrones
             new_region = ThroneRegion(index=i, settings=map_class.settings, seed=map_class.seed)
@@ -103,7 +108,7 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
         new_region.generate_graph()
         new_region.generate_terrain()
         new_region.generate_population()
-        new_region.embed_region(global_coordinates=layout.region_graph.coordinates[i], scale=map_class.scale, map_size=map_class.map_size)
+        new_region.embed_region(global_coordinates=region_graph.coordinates[i], scale=map_class.scale, map_size=map_class.map_size)
 
         # Updates info about provinces
         for province in new_region.provinces:
@@ -133,12 +138,14 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
 
     # Check to add omni here
     if settings.omniscience:
+        province_graph_2 = layout.province_graphs[2]
+        assert province_graph_2 is not None, "generate_province_layout() must be called for plane 2 first"
         for province in province_list[2]:
             fail = False
             if not has_terrain(province.terrain_int, 68719476736):
                 continue
             else:
-                for j in layout.province_graphs[2].get_node_connections(province.index-1):
+                for j in province_graph_2.get_node_connections(province.index-1):
                     i_province = province_list[2][j[0]]
                     if not has_terrain(i_province.terrain_int, 68719476736):
                         fail = True
@@ -153,21 +160,26 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
         province.shape = 3
 
     for plane in map_class.planes:
-        for province in province_list[plane]:  # Do this here in case of terrain changes from mountains (curse you Illwinter!!!!)
+        province_graph = layout.province_graphs[plane]
+        assert province_graph is not None, f"generate_province_layout() must be called for plane {plane} first"
+        # Do this here in case of terrain changes from mountains (curse you Illwinter!!!!)
+        for province in province_list[plane]:
             terrain_list[plane].append([province.index, province.terrain_int])
-            province.coordinates = layout.province_graphs[plane].coordinates[province.index-1]
+            province.coordinates = province_graph.coordinates[province.index-1]
 
     map_class.special_start_locations = special_start_locations
     map_class.terrain_list = terrain_list
     map_class.connection_list = layout.connections
-    map_class.min_dist = layout.min_dist
+    map_class.min_dist = [x for x in layout.min_dist] # pass one by one to avoid type issues
     map_class.gate_list = layout.gates
     map_class.layout = layout
 
     ########################################################################################################################
     # Do pixel mapping
     generator_logging('Simulating geography...')
-    map_class.height_map, map_class.pixel_map = simplex_generator_geography(map_class, seed=map_class.seed)
+    height_map, pixel_map = simplex_generator_geography(map_class, seed=map_class.seed)
+    map_class.height_map = [h for h in height_map] # pass one by one to avoid type issues
+    map_class.pixel_map = [p for p in pixel_map] # pass one by one to avoid type issues
     for plane in map_class.planes:
         map_class.pixel_owner_list[plane] = pb_pixel_allocation(map_class.pixel_map[plane])
 
