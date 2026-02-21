@@ -53,6 +53,7 @@ def test_class_layout_assertions():
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 def test_generator_full_integration():
     """Full integration test using standard config file
 
