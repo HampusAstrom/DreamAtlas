@@ -289,9 +289,6 @@ class DreamAtlasGraph:
         self.coordinates = np.zeros((self.size, 2), dtype=np.int32)
         self.darts = np.zeros((self.size, self.size, 2), dtype=np.int8)
 
-        print(self.map_size, self.size)
-        print('Embedding graph with %i nodes into graph with %i nodes' % (len(s_graph), self.size))
-
         # Set the graph size to embed (smaller is faster)
         scale_down = 100
         size = np.maximum(1, np.array(self.map_size / scale_down, dtype=np.int64))
