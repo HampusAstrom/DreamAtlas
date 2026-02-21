@@ -83,7 +83,7 @@ def _jump_flood_algorithm(pixel_matrix: np.ndarray,
 
 def find_pixel_ownership(coordinates_array: np.ndarray,
                          map_size: np.ndarray,
-                         noise_array: np.ndarray = np.array,
+                         noise_array: np.ndarray,
                          scale_down: int = 2):
     # Runs a jump flood algorithm on a scaled down version of the map, then scales up and redoes the algorithm more
     # finely. This speeds up runtime significantly. The main function of the JFA is run in Numba, which speeds up the

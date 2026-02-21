@@ -8,6 +8,7 @@ Run with:
   pytest -m "not integration"     # Skip integration tests
 """
 import pytest
+import numpy as np
 
 from DreamAtlas.classes import DreamAtlasSettings, DominionsMap
 from DreamAtlas.generators.DreamAtlas_map_generator import generator_dreamatlas
@@ -131,6 +132,56 @@ def test_dominions_map_pixel_map_none_access():
         if m.pixel_map[i] is None:
             # Instead of raising, check for None and skip access
             assert m.pixel_map[i] is None
+
+def test_fill_dreamatlas_basic():
+    """Basic test for fill_dreamatlas: should run without error for minimal valid input."""
+    m = DominionsMap()
+    # Minimal setup for one plane
+    m.planes = [1]
+    m.terrain_list[1] = [(1, 0)]  # One province, terrain int 0
+    m.map_size[1] = [2, 2]
+    m.pixel_owner_list[1] = [[0, 0, 1, 1]]  # One pixel owned by province 1
+    m.population_list[1] = [(1, 100)]
+    m.neighbour_list[1] = []
+    m.province_capital_locations[1] = [(0, 0, 0)]
+    import numpy as np
+    m.height_map[1] = np.zeros((2, 2), dtype=int)
+    m.pixel_map[1] = np.ones((2, 2), dtype=int)
+    from typing import Optional
+    plane_image_types: list[Optional[str]] = [None for _ in range(10)]
+    plane_image_types[1] = '.d6m'
+    # Should not raise
+    m.fill_dreamatlas(plane_image_types)
+    # Check province_list populated
+    assert len(m.province_list[1]) == 1
+    assert m.province_list[1][0].index == 1
+    assert m.province_list[1][0].population == 100
+    # Check province_graphs is not None
+    assert m.layout is not None
+    assert m.layout.province_graphs[1] is not None
+
+def test_make_d6m_minimal(tmp_path):
+    m = DominionsMap()
+    m.planes = [1]
+    m.terrain_list[1] = [(1, 0)]
+    m.map_size[1] = [2, 2]
+    m.pixel_owner_list[1] = [[0, 0, 1, 1]]
+    m.population_list[1] = [(1, 100)]
+    m.neighbour_list[1] = []
+    m.province_capital_locations[1] = [(0, 0, 0)]
+    m.height_map[1] = np.zeros((2, 2), dtype=int)
+    m.pixel_map[1] = np.ones((2, 2), dtype=int)
+    from typing import Optional
+    plane_image_types: list[Optional[str]] = [None for _ in range(10)]
+    plane_image_types[1] = '.d6m'
+    m.fill_dreamatlas(plane_image_types)
+    # Set min_dist to a float to avoid None error
+    m.min_dist[1] = 1.0
+    out_path = tmp_path / "test.d6m"
+    # Should not raise
+    m.make_d6m(1, str(out_path))
+    assert out_path.exists()
+    assert out_path.stat().st_size > 0
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
