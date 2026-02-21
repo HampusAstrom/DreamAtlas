@@ -86,6 +86,44 @@ def test_generator_full_integration():
     assert result.scale is not None
     assert len(result.region_list[1]) > 0  # At least some homeland regions
 
+    # Test saving and loading .d6m file
+    import tempfile, os
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        # Save .d6m file for each plane
+        for plane in result.planes:
+            d6m_path = os.path.join(tmp_dir, f"test_plane{plane}.d6m")
+            result.make_d6m(plane=plane, filepath=d6m_path)
+            # Load .d6m file into new map
+            loaded_map = DominionsMap()
+            loaded_map.planes = [plane]
+            loaded_map.load_file(d6m_path, plane=plane)
+            # Check loaded attributes
+            # Compare map_size using np.array_equal to avoid ambiguous truth value
+            assert np.array_equal(loaded_map.map_size[plane], result.map_size[plane])
+            assert loaded_map.min_dist[plane] == pytest.approx(result.min_dist[plane])
+            # Check shape only if not None
+            assert loaded_map.height_map[plane] is not None
+            assert result.height_map[plane] is not None
+            res_height_map = result.height_map[plane]
+            assert res_height_map is not None, "result.height_map[plane] should not be None"
+            load_height_map = loaded_map.height_map[plane]
+            assert load_height_map is not None, "loaded_map.height_map[plane] should not be None"
+            assert load_height_map.shape == res_height_map.shape
+            assert loaded_map.pixel_map[plane] is not None
+            assert result.pixel_map[plane] is not None
+            res_pixel_map = result.pixel_map[plane]
+            assert res_pixel_map is not None, "result.pixel_map[plane] should not be None"
+            load_pixel_map = loaded_map.pixel_map[plane]
+            assert load_pixel_map is not None, "loaded_map.pixel_map[plane] should not be None"
+            assert load_pixel_map.shape == res_pixel_map.shape
+        # Remove files
+        for file in os.listdir(tmp_dir):
+            os.remove(os.path.join(tmp_dir, file))
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir)
+
 def test_dominions_map_initialization():
     m = DominionsMap()
     assert m.region_list is not None
