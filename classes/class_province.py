@@ -1,79 +1,49 @@
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Optional, List, Any
 
-
+@dataclass
 class Province:
+    # Graph data
+    index: int
+    parent_region: Optional["Region"] # type: ignore
+    plane: int
+    name: Optional[str] = None
+    coordinates: Optional[list] = None
 
-    def __init__(self,
-                 index: int = None,
-                 name: str = None,
-                 plane: int = None,
-                 coordinates: list = None,
-                 terrain_int: int = 0,
-                 capital_location: bool = False,
-                 capital_nation: int = None,
-                 parent_region=None,
-                 has_commands: bool = False,
-                 poptype: int = None,
-                 owner: int = None,
-                 killfeatures: bool = False,
-                 features: list[int] = list(),
-                 knownfeatures: list[int] = list(),
-                 fort: int = None,
-                 temple: bool = False,
-                 lab: bool = False,
-                 unrest: int = 0,
-                 population: int = None,
-                 defence: int = None,
-                 skybox: str = None,
-                 batmap: str = None,
-                 groundcol: list[int, int, int] = None,
-                 rockcol: list[int, int, int] = None,
-                 fogcol: list[int, int, int] = None,
-                 size: float = None,
-                 shape: float = None,
-                 height: int = None):
+    # Province properties
+    terrain_int: int = 0
+    has_gate: bool = False
+    capital_location: bool = False
+    capital_circle: bool = False
+    capital_nation: Optional[int] = None
 
-        # Graph data
-        self.index = index
-        self.name = name
-        self.plane = plane
-        self.coordinates = coordinates
+    # Province commands
+    has_commands: bool = False
+    poptype: Optional[int] = None
+    owner: Optional[int] = None
+    killfeatures: bool = False
+    features: List[int] = field(default_factory=list)
+    knownfeatures: List[int] = field(default_factory=list)
+    fort: Optional[int] = None
+    temple: bool = False
+    lab: bool = False
+    unrest: int = 0
+    population: Optional[int] = None
+    defence: Optional[int] = None
+    skybox: Optional[str] = None
+    batmap: Optional[str] = None
+    groundcol: Optional[List[int]] = None
+    rockcol: Optional[List[int]] = None
+    fogcol: Optional[List[int]] = None
 
-        # Province properties
-        self.terrain_int = terrain_int
-        self.has_gate = False
-        self.capital_location = capital_location
-        self.capital_circle = False
-        self.capital_nation = capital_nation
-        self.parent_region = parent_region
-
-        # Province commands
-        self.has_commands = has_commands
-        self.poptype = poptype
-        self.owner = owner
-        self.killfeatures = killfeatures
-        self.features = features
-        self.knownfeatures = knownfeatures
-        self.fort = fort
-        self.temple = temple
-        self.lab = lab
-        self.unrest = unrest
-        self.population = population
-        self.defence = defence
-        self.skybox = skybox
-        self.batmap = batmap
-        self.groundcol = groundcol
-        self.rockcol = rockcol
-        self.fogcol = fogcol
-
-        # Drawing properties
-        self.size = size
-        self.shape = shape
-        self.height = height
+    # Drawing properties
+    size: Optional[float] = None
+    shape: Optional[float] = None
+    height: Optional[int] = None
 
     def __str__(self):  # Printing the class returns this
-
         string = f'\nType - {type(self)}\n\n'
-        for key in self.__dict__:
-            string += f'{key} : {self.__dict__[key]}\n'
-
+        for key, value in self.__dict__.items():
+            string += f'{key} : {value}\n'
         return string

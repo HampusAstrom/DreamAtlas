@@ -229,7 +229,7 @@ class DominionsMap:
 
             height_dict = dict()
             for i, terrain_int in self.terrain_list[plane]:
-                new_province = Province(index=i, terrain_int=terrain_int, parent_region=None)
+                new_province = Province(index=i, parent_region=None, plane=plane, terrain_int=terrain_int)
                 self.province_list[plane].append(new_province)
 
                 height_dict[i] = 0
