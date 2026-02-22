@@ -1,4 +1,4 @@
-from flow_map import FlowMap, setup
+from map import FlowMap, setup
 from flow_types import FlowSettings
 
 def run():

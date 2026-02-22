@@ -1,8 +1,8 @@
 import networkx as nx
 import numpy as np
 
-from FlowAtlas_generator.flow_types import MapNode
-from flow_map import FlowMap
+from flow_atlas.flow_types import MapNode
+from map import FlowMap
 
 def generate_nodes(mapObject : FlowMap):
     # Calculate derived values
@@ -41,4 +41,4 @@ def generate_nodes(mapObject : FlowMap):
     # Smooth the province map algorithmically
     # 6 players * 15 provinces per player = 90 provinces
     # 15 regions -> about six provinces per region
-    # makes a total of 108 provinces, 
+    # makes a total of 108 provinces,
