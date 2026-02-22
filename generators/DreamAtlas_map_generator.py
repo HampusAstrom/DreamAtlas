@@ -90,8 +90,9 @@ def generator_dreamatlas(settings: DreamAtlasSettings,
         elif region_type == 1:  # Generate the peripherals
             nations = list()
             for j in region_graph.get_node_connections(i):
-                if j < len(nation_list):
-                    nations.append(nation_list[region_graph.index_2_iid[int(j)]])
+                idx = int(j[0])
+                if idx < len(nation_list):
+                    nations.append(nation_list[region_graph.index_2_iid[idx]])
             new_region = PeripheryRegion(index=i, nations=nations, settings=settings, seed=map_class.seed)
         elif region_type == 2:  # Generate the thrones
             new_region = ThroneRegion(index=i, settings=map_class.settings, seed=map_class.seed)
