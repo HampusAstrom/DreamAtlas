@@ -1,9 +1,8 @@
-from dreamAtlas.classes import DominionsMap as DAmap
 from flow_types import FlowSettings
 
-class FlowMap(DAmap):
+# TODO add inheritance from abstract parent of DominionsMap
+class FlowMap:
     def __init__(self, settings : FlowSettings):
-        DAmap.__init__(self)
         self.settings = settings
         self.num_regions = settings.num_players + int(0.5 * settings.cap_connections * settings.num_players)
         self.num_prov = settings.num_players * settings.num_prov_per_player
