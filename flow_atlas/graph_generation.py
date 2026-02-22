@@ -26,18 +26,22 @@ def generate_nodes(mapObject : FlowMap):
             return True
 
         for j in range(mapObject.settings.cap_connections):
+            candidate_node = None
             for n in range(max_iterations):
                 candidate_node = region_center.create_neighbor(ave_distance_between_prov, rel_radius_width)
                 if is_valid_node(candidate_node, region_graph):
                     break
+            assert(candidate_node is not None), "Failed to generate a valid node after {} iterations".format(max_iterations)
             region_graph.add_node(candidate_node)
 
         for k in range(mapObject.settings.cap_connections, mapObject.num_prov_per_region):
             random_border_node = np.random.choice(list(region_graph.nodes))
+            node_candidate = None
             for n in range(max_iterations):
                 node_candidate = random_border_node.create_neighbor(ave_distance_between_prov, rel_radius_width)
                 if is_valid_node(node_candidate, region_graph):
                     break
+            assert(node_candidate is not None), "Failed to generate a valid node after {} iterations".format(max_iterations)
             region_graph.add_node(node_candidate)
         region_list.append(region_graph)
     mapObject.region_graphs = region_list
