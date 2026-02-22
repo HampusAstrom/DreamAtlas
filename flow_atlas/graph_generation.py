@@ -1,34 +1,47 @@
-import networkx as nx
 import numpy as np
 
-from flow_atlas.flow_types import MapNode
-from map import FlowMap
+from flow_atlas.flow_types import MapNode, FlowGraph
+from flow_atlas.map import FlowMap
 
 def generate_nodes(mapObject : FlowMap):
     # Calculate derived values
     ave_area_per_prov = (mapObject.map_size[0] * mapObject.map_size[1]) / mapObject.num_prov
     ave_distance_between_prov = (ave_area_per_prov ** 0.5)
+    # (Relative) Width of the disc around old nodes where new nodes may be generated
+    rel_radius_width = 0.6
 
     region_list = list()
     for i in range(mapObject.num_regions):
-        region_graph = nx.Graph()
-        region_graph.add_node(MapNode())
+        region_graph = FlowGraph()
+        region_center = MapNode()
+        region_graph.add_node(region_center)
+
+        max_iterations = 100
+
+        def is_valid_node(node, graph):
+            for existing_node in graph.nodes:
+                distance = ((node.x - existing_node.x) ** 2 + (node.y - existing_node.y) ** 2) ** 0.5
+                if distance < ave_distance_between_prov * (1 - rel_radius_width/2):
+                    return False
+            return True
+
         for j in range(mapObject.settings.cap_connections):
-            # Generate a random point within on a distance of 0.7 to 1.3 times the average distance between provinces, with a random angle
-            radius = (np.sqrt(np.random.uniform(0, 1))*0.6 + 0.7) * ave_distance_between_prov
-            angle = np.random.uniform(0, 2 * np.pi)
-            x = radius * np.cos(angle)
-            y = radius * np.sin(angle)
-            region_graph.add_node(MapNode(x, y))
-            region_graph.add_edge(0, j)
+            for n in range(max_iterations):
+                candidate_node = region_center.create_neighbor(ave_distance_between_prov, rel_radius_width)
+                if is_valid_node(candidate_node, region_graph):
+                    break
+            region_graph.add_node(candidate_node)
+
         for k in range(mapObject.settings.cap_connections, mapObject.num_prov_per_region):
-            # all existing nodes are within distance 1.3 of the capital)
-            radius = (np.sqrt(np.random.uniform(0, 1))*0.6 + 1.4) * ave_distance_between_prov
-            angle = np.random.uniform(0, 2 * np.pi)
-            x = radius * np.cos(angle)
-            y = radius * np.sin(angle)
-            region_graph.add_node(MapNode(x, y))
+            random_border_node = np.random.choice(list(region_graph.nodes))
+            for n in range(max_iterations):
+                node_candidate = random_border_node.create_neighbor(ave_distance_between_prov, rel_radius_width)
+                if is_valid_node(node_candidate, region_graph):
+                    break
+            region_graph.add_node(node_candidate)
         region_list.append(region_graph)
+    mapObject.region_graphs = region_list
+
 
     # TODO: Generate the connections between the non-cap regions
 

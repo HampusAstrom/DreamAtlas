@@ -1,11 +1,12 @@
-from map import FlowMap, setup
-from flow_types import FlowSettings
+from flow_atlas.map import FlowMap, setup
+from flow_atlas.flow_types import FlowSettings
+from flow_atlas.graph_generation import generate_nodes
 
 def run():
     settings = FlowSettings()
     mapObject = FlowMap(settings)
     setup(mapObject) #Set up objects and constants, load any necessary resources
-    # generate_nodes(mapObject) #Place province capitals
+    generate_nodes(mapObject) #Place province capitals, generate edges
     # generate_connections(mapObject)
     # generate_provinces(mapObject) #Generate province borders, determine possible start locations/throne sites ?
     # generate_border_terrain(mapObject)
