@@ -1,6 +1,6 @@
-from DreamAtlas.flow_atlas.map import FlowMap, setup
-from DreamAtlas.flow_atlas.flow_types import FlowSettings
-from DreamAtlas.flow_atlas.graph_generation import generate_nodes
+from FlowAtlas.map import FlowMap, setup
+from FlowAtlas.flow_types import FlowSettings
+from FlowAtlas.graph_generation import generate_nodes
 
 def run():
     settings = FlowSettings()

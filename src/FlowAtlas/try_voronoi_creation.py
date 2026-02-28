@@ -1,7 +1,7 @@
 """
 Voronoi diagram generation script.
 Can be run as: python try_voronoi_creation.py
-Or as module: python -m DreamAtlas.flow_atlas.try_voronoi_creation
+Or as module: python -m FlowAtlas.try_voronoi_creation
 """
 
 from libpysal import weights
