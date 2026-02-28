@@ -1,7 +1,7 @@
 import numpy as np
 
-from DreamAtlas.flow_atlas.flow_types import MapNode, FlowGraph
-from DreamAtlas.flow_atlas.map import FlowMap
+from FlowAtlas.flow_types import MapNode, FlowGraph
+from FlowAtlas.map import FlowMap
 
 def generate_nodes(mapObject : FlowMap):
     # Calculate derived values

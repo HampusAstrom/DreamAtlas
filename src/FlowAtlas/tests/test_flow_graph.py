@@ -1,8 +1,8 @@
 import pytest
 import networkx as nx
-from DreamAtlas.flow_atlas.flow_types import MapNode
+from FlowAtlas.flow_types import MapNode
 
-def graph_generation():
+def test_graph_generation():
     test_graph = nx.Graph()
     assert(test_graph)
 

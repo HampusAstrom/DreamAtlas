@@ -1,10 +1,11 @@
 from setuptools import setup, find_packages
 
 VERSION = '1.0.0'
-DESCRIPTION = 'DreamAtlas'
-LONG_DESCRIPTION = 'DreamAtlas: The premier map editing and generation tool'
+DESCRIPTION = 'DreamAtlas and FlowAtlas'
+LONG_DESCRIPTION = '''DreamAtlas: The premier map editing and generation tool
+FlowAtlas: Experimental flow-based map generation for DreamAtlas'''
 
-# Setting up
+# Setting up both DreamAtlas and FlowAtlas packages
 setup(
     name="DreamAtlas",
     version=VERSION,
@@ -14,7 +15,7 @@ setup(
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/plain",
     package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    packages=find_packages(where="src"),  # Finds both DreamAtlas and FlowAtlas
     python_requires=">=3.8",
     install_requires=[
         'numpy',
@@ -39,7 +40,7 @@ setup(
             'sphinx-rtd-theme',
         ],
     },
-    keywords=['procedural-generation', 'map-generation', 'voronoi'],
+    keywords=['procedural-generation', 'map-generation', 'voronoi', 'waveform collapse'],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Education",
