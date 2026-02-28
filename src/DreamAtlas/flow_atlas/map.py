@@ -1,4 +1,4 @@
-from flow_atlas.flow_types import FlowSettings
+from DreamAtlas.flow_atlas.flow_types import FlowSettings
 
 class FlowMap:
     def __init__(self, settings : FlowSettings):

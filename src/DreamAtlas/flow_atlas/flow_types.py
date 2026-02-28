@@ -6,9 +6,9 @@ class FlowGraph(nx.Graph):
     def __init__(self):
         super().__init__()
 
-    def add_node(self, node: 'MapNode'):
-        super().add_node(node)
-        self.update_edges(node)
+    def add_node(self, node_for_adding: 'MapNode', **attr):
+        super().add_node(node_for_adding, **attr)
+        self.update_edges(node_for_adding)
 
     def update_edges(self, node: 'MapNode'):
         # TODO: implement this function

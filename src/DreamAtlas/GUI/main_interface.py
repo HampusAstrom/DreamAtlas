@@ -313,7 +313,7 @@ class MainInterface(ttk.Frame):
                 done_nodes = set()
                 for i, (x1, y1) in enumerate(virtual_coordinates):
                     for j in np.argwhere(virtual_graph[i, :] == 1):
-                        j = int(j)
+                        j = int(j[0])
 
                         neighbour_col = CONNECTION_COLOURS[0]
                         connection_obj = None

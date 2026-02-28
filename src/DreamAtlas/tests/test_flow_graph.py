@@ -1,6 +1,6 @@
 import pytest
 import networkx as nx
-from flow_atlas.flow_types import MapNode
+from DreamAtlas.flow_atlas.flow_types import MapNode
 
 def graph_generation():
     test_graph = nx.Graph()
@@ -25,4 +25,3 @@ def graph_generation():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-
