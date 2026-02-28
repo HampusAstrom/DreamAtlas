@@ -1,3 +1,9 @@
+"""
+Voronoi diagram generation script.
+Can be run as: python try_voronoi_creation.py
+Or as module: python -m DreamAtlas.flow_atlas.try_voronoi_creation
+"""
+
 from libpysal import weights
 from libpysal.cg import voronoi_frames
 import libpysal
@@ -27,19 +33,24 @@ def main():
     num_points = 100
     min_distance = 0.1
     points = gen_grid(num_points)
-    plt.figure(figsize=(8, 8))
-    plt.scatter(points[:, 0], points[:, 1], c='red', marker='x')
+
+    # TODO consider if we can alter the relaxation to account for the looping
+    # nature of the map, or if we can just add "ghost" points around the edges to simulate it
+    # TODO see if we can change Voronoi/Lloyd to use full map field, ie
+    # handle possibly adding vertices on the outside of the outermost points,
+    # and handle distance calculations with looping in mind
     lloyd = LloydRelaxation(points)
-    for _ in range(2):
+    for _ in range(5):
         lloyd.relax()
     points = lloyd.get_points()
-    plt.figure(figsize=(8, 8))
+    dpi = 100
+    plt.figure(figsize=(1920/dpi, 1080/dpi), dpi=dpi)
     plt.scatter(points[:, 0], points[:, 1], c='red', marker='x')
 
     # Plot Voronoi diagram using scipy.spatial.Voronoi
     vor = Voronoi(points)
     fig = voronoi_plot_2d(vor, show_vertices=False, line_colors='orange', line_width=1.2, line_alpha=0.8, point_size=2)
-    plt.scatter(points[:, 0], points[:, 1], c='red', marker='x', label='Points')
+    # plt.scatter(points[:, 0], points[:, 1], c='red', marker='x', label='Points')
     plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.title('Voronoi Diagram')

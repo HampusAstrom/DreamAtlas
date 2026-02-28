@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from flow_atlas.flow_types import FlowSettings
-from flow_atlas.map import FlowMap
-from flow_atlas.graph_generation import generate_nodes
+from DreamAtlas.flow_atlas.flow_types import FlowSettings
+from DreamAtlas.flow_atlas.map import FlowMap
+from DreamAtlas.flow_atlas.graph_generation import generate_nodes
 
 def plot_graph(graph: nx.Graph):
     pos = {node: (node.x, node.y) for node in graph.nodes}
