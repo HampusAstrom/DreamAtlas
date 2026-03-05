@@ -327,7 +327,7 @@ class TerrainGraph(nx.Graph):
                 return False
         return True
 
-    def setup_element_dists(self, global_metrics: dict, reset_existing_terrain: bool = True):
+    def setup_element_dists(self, reset_existing_terrain: bool = True):
         """
         Initialize element attributes needed for wave function collapse.
 
@@ -335,8 +335,6 @@ class TerrainGraph(nx.Graph):
         global_adjusting_dist when it's updated.
 
         Args:
-            global_metrics: Dict containing 'global_adjusting_dist' with 'province_terrains'
-                           and 'border_terrains' keys
             reset_existing_terrain: If False, preserves any pre-set terrain values.
                 WARNING: When False, you MUST ensure that global_metrics counters
                 (set_provinces, set_borders), element dists, weights, and constraints
@@ -351,10 +349,10 @@ class TerrainGraph(nx.Graph):
                   "and element dists/weights/constraints may be inconsistent. "
                   "Make sure to initialize those properly for pre-set elements.")
 
-        if 'global_adjusting_dist' not in global_metrics:
+        if 'global_adjusting_dist' not in self.global_metrics:
             return
 
-        global_dist = global_metrics['global_adjusting_dist']
+        global_dist = self.global_metrics['global_adjusting_dist']
         province_terrains = global_dist.get('province_terrains', {})
         border_terrains = global_dist.get('border_terrains', {})
 

@@ -146,10 +146,12 @@ def collect_global_metrics(graph: TerrainGraph, settings: dict):
     }
     return ret
 
-def determine_target_distributions(global_metrics: dict, settings: dict):
+def determine_target_distributions(graph: TerrainGraph, settings: dict):
     # determine the target terrain distribution based on global metrics and settings
     assert 'base_global_target_dist' in settings
     assert 'base_global_weight' in settings
+
+    global_metrics = graph.global_metrics
 
     print("determining target distributions, currently just using base global target dist from settings")
     # TODO determine if base_global_target_dist  and base_global_weight should be a copy or pointer
@@ -162,7 +164,7 @@ def determine_target_distributions(global_metrics: dict, settings: dict):
     # set global dists as a weighted average of national dists and
     # a base global dist
 
-def preprocess_graph(graph: TerrainGraph, global_metrics: dict, settings: dict):
+def preprocess_graph(graph: TerrainGraph, settings: dict):
     # preprocess the graph, checking for any predefined values and calculating initial statistics
 
     print("preprocessing graph, currently we:")
@@ -170,14 +172,14 @@ def preprocess_graph(graph: TerrainGraph, global_metrics: dict, settings: dict):
     print("- add a 'pointer' to global_adjusting_dist in dict 'dists' for element (node/province and edge/border), making sure to use the respective dicts for each only")
 
     # Use TerrainGraph's built-in setup method
-    graph.setup_element_dists(global_metrics)
+    graph.setup_element_dists()
 
-def all_provNbor_set(graph: TerrainGraph, global_metrics: dict):
+def all_provNbor_set(graph: TerrainGraph):
     # check if all provinces and borders in the graph have their terrain set
-    # Delegate to TerrainGraph's is_all_set method (which consumes global_metrics)
+    # Delegate to TerrainGraph's is_all_set method
     return graph.is_all_set()
 
-def calculate_joint_probability_distribution(element: Element, global_metrics: dict):
+def calculate_joint_probability_distribution(element: Element, graph: TerrainGraph):
     # calculate the joint probability distribution for the given element
     # (province or border) based on global and local factors
 
@@ -189,13 +191,13 @@ def calculate_joint_probability_distribution(element: Element, global_metrics: d
     # as a weighted average
     weights = element['dist_weights']
     # TODO replace with pointer to correct dict for provinces or borders TODO TODO TODO
-    joint_prob_dist = {terrain: 0.0 for terrain in global_metrics.get('global_target_dist', {})}
+    joint_prob_dist = {terrain: 0.0 for terrain in graph.global_metrics.get('global_target_dist', {})}
     for name, dist in element['dists'].items(): # note, a pointer to the global dist should be included here as well
-        assert len(dist) == len(joint_prob_dist), f"Local dist {name} has different length than global adjusting dist"
+        assert len(dist) == len(joint_prob_dist), f"Local dist {name} has different length than global_target_dist"
         assert name in weights, f"Dist {name} for element {element} does not have a corresponding weight in dist_weights"
         weight = weights[name]
         for terrain, prob in dist.items():
-            assert terrain in joint_prob_dist, f"Terrain {terrain} from local dist {name} not found in global adjusting dist"
+            assert terrain in joint_prob_dist, f"Terrain {terrain} from local dist {name} not found in global_target_dist"
             joint_prob_dist[terrain] += prob * weight
 
     # apply constraints
@@ -235,7 +237,7 @@ def shannon_entropy(prob_dist: dict):
                 entropy -= prob * np.log(prob)
     return entropy
 
-def select_element_to_set(graph: TerrainGraph, global_metrics: dict) -> Element:
+def select_element_to_set(graph: TerrainGraph) -> Element:
     # select the next element (province or border) to set based on entropy and other factors
 
     # check entropy of unset elements and select the one with lowest entropy,
@@ -247,7 +249,7 @@ def select_element_to_set(graph: TerrainGraph, global_metrics: dict) -> Element:
     for element in graph.get_unset_elements():
         # TODO, instead of calculating the joint probability distribution for each element here,
         # we should store it in the element and only update it when needed, which should be much more efficient
-        joint_prob_dist = calculate_joint_probability_distribution(element, global_metrics)
+        joint_prob_dist = calculate_joint_probability_distribution(element, graph)
         entropy = shannon_entropy(joint_prob_dist)
 
         if entropy < lowest_entropy:
@@ -263,32 +265,42 @@ def select_element_to_set(graph: TerrainGraph, global_metrics: dict) -> Element:
     chosen_index = np.random.choice(len(element_to_set))
     return element_to_set[chosen_index]
 
-def select_element_terrain(element: Element, graph: TerrainGraph, global_metrics: dict):
+def select_element_terrain(element: Element, graph: TerrainGraph):
     # select a terrain for the given element (province or border) based on probabilities and constraints
 
     # TODO, instead of calculating the joint probability distribution for each element here,
     # we should store it in the element and only update it when needed, which should be much more efficient
-    joint_prob_dist = calculate_joint_probability_distribution(element, global_metrics)
+    joint_prob_dist = calculate_joint_probability_distribution(element, graph)
     return np.random.choice(list(joint_prob_dist.keys()), p=list(joint_prob_dist.values()))
 
-def set_element_terrain(element: Element, terrain, graph: TerrainGraph, global_metrics: dict):
+def set_element_terrain(element: Element, terrain, graph: TerrainGraph):
     # set the terrain for the given element (province or border) in the graph
     element['terrain'] = terrain
 
-    update_statistics_and_probabilities(element, graph, global_metrics)
+    update_statistics_and_probabilities(element, graph)
 
-def update_statistics_and_probabilities(element: Element, graph: TerrainGraph, global_metrics: dict):
+def update_statistics_and_probabilities(origin_element: Element, graph: TerrainGraph):
     # update any statistics and probabilities after setting an element's terrain
 
+    # update information about origin_element
     # Update global counters
-    if element.is_node:
-        global_metrics['set_provinces'] = global_metrics.get('set_provinces', 0) + 1
+    if origin_element.is_node:
+        graph.global_metrics['set_provinces'] = graph.global_metrics.get('set_provinces', 0) + 1
     else:
-        global_metrics['set_borders'] = global_metrics.get('set_borders', 0) + 1
+        graph.global_metrics['set_borders'] = graph.global_metrics.get('set_borders', 0) + 1
+
+    # update local counters that include the origin_element
+    # TODO
+
+    # determine all nearby elements that are affected by the setting of this element,
+    # and update their probabilities based on the new information
+    # this should probably call some method on the graph that returns the affected elements
+    # and then (for each) call a method with that takes the origin_element and
+    # the affected_element and updates them accordingly
 
     # TODO we need to do a lot more here
     # For now, just a placeholder that compiles
-    joint_prob_dist = calculate_joint_probability_distribution(element, global_metrics)
+    joint_prob_dist = calculate_joint_probability_distribution(origin_element, graph)
     # TODO: update neighbor probabilities, constraint propagation, etc.
 
 
@@ -324,14 +336,12 @@ class WaveFunctionCollapse:
         collected_metrics = self.collect_global_metrics(self.graph, self.settings)
         assert isinstance(collected_metrics, dict), "collect_global_metrics should return a dict of global metrics"
         self.graph.global_metrics = collected_metrics
-        # Keep a local reference for convenience (same dict object, won't drift)
-        self.global_metrics = self.graph.global_metrics
 
         # 2. determine target base terrain distributions
-        self.determine_target_distributions(self.global_metrics, self.settings)
+        self.determine_target_distributions(self.graph, self.settings)
 
         # 3. preprocess incoming graph
-        self.preprocess_graph(self.graph, self.global_metrics, self.settings)
+        self.preprocess_graph(self.graph, self.settings)
 
         # 4. start wave function collapse procedure
         # TODO determine if wave_function_collapse() should be called in init or later
@@ -354,10 +364,10 @@ class WaveFunctionCollapse:
     # the main control flow function for the wave function collapse process
     # taking in a graph and any settings and returning a graph with terrains set
     def wave_function_collapse(self) -> TerrainGraph:
-        assert isinstance(self.global_metrics, dict), "collect_global_metrics should return a dict of global metrics"
-        while not all_provNbor_set(self.graph, self.global_metrics):
-            element_to_set = select_element_to_set(self.graph, self.global_metrics)
-            terrain = select_element_terrain(element_to_set, self.graph, self.global_metrics)
-            set_element_terrain(element_to_set, terrain, self.graph, self.global_metrics)
+        while not all_provNbor_set(self.graph):
+            # TODO consier if all these steps should be in one function
+            element_to_set = select_element_to_set(self.graph)
+            terrain = select_element_terrain(element_to_set, self.graph)
+            set_element_terrain(element_to_set, terrain, self.graph)
 
         return self.graph

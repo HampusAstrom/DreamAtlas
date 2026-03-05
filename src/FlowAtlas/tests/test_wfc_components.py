@@ -262,24 +262,6 @@ class TestWaveFunctionCollapseInitialization(unittest.TestCase):
         self.assertEqual(wfc.graph.global_metrics['provinces'], 2)
         self.assertEqual(wfc.graph.global_metrics['borders'], 1)
 
-    def test_wfc_global_metrics_alias(self):
-        """Test that self.global_metrics is an alias to self.graph.global_metrics."""
-        graph = TerrainGraph()
-        graph.add_node("A")
-        graph.add_edge("A", "A" if False else "B")  # avoid self-loop for test
-        graph.add_node("B")
-        graph.add_edge("A", "B")
-
-        wfc = WaveFunctionCollapse(self.settings, graph)
-
-        # Both should reference same dict
-        self.assertIs(wfc.global_metrics, wfc.graph.global_metrics)
-
-        # Mutations to one affect the other
-        wfc.global_metrics['test_key'] = 'test_value'
-        self.assertEqual(wfc.graph.global_metrics['test_key'], 'test_value')
-
-
 class TestSetupElementDists(unittest.TestCase):
     """Test setup_element_dists behavior and warnings."""
 
@@ -296,12 +278,14 @@ class TestSetupElementDists(unittest.TestCase):
                 'border_terrains': {'bridge': 1.0},
             }
         }
+        # Assign metrics to graph so setup_element_dists can access it
+        self.graph.global_metrics = self.metrics
 
     def test_setup_element_dists_resets_terrain(self):
         """Test that setup_element_dists resets existing terrain by default."""
         self.graph.nodes["A"]['terrain'] = 'existing'
 
-        self.graph.setup_element_dists(self.metrics, reset_existing_terrain=True)
+        self.graph.setup_element_dists(reset_existing_terrain=True)
 
         # Should be reset
         self.assertIsNone(self.graph.nodes["A"].get('terrain'))
@@ -310,14 +294,14 @@ class TestSetupElementDists(unittest.TestCase):
         """Test that setup_element_dists preserves terrain when flag=False."""
         self.graph.nodes["A"]['terrain'] = 'existing'
 
-        self.graph.setup_element_dists(self.metrics, reset_existing_terrain=False)
+        self.graph.setup_element_dists(reset_existing_terrain=False)
 
         # Should be preserved
         self.assertEqual(self.graph.nodes["A"]['terrain'], 'existing')
 
     def test_setup_element_dists_creates_pointers(self):
         """Test that setup_element_dists creates dist pointers."""
-        self.graph.setup_element_dists(self.metrics)
+        self.graph.setup_element_dists()
 
         # Check that dists pointers were set
         for element in self.graph.get_all_elements():
