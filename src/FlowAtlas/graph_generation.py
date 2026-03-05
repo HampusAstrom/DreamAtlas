@@ -1,6 +1,6 @@
 import numpy as np
 
-from FlowAtlas.flow_types import MapNode, FlowGraph
+from FlowAtlas.flow_types import ProvinceNode, FlowGraph
 from FlowAtlas.map import FlowMap
 
 def generate_nodes(mapObject : FlowMap):
@@ -13,7 +13,7 @@ def generate_nodes(mapObject : FlowMap):
     region_list = list()
     for i in range(mapObject.num_regions):
         region_graph = FlowGraph()
-        region_center = MapNode()
+        region_center = ProvinceNode()
         region_graph.add_node(region_center)
 
         max_iterations = 100
