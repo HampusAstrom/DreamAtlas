@@ -152,6 +152,10 @@ def main():
     plt.title('WFC Terrain Assignment on Voronoi Graph')
     plt.show()
 
+    triangles = nx.all_triangles(graph)
+    for tri in triangles:
+        if check_triangle_ban(graph, tri):
+            raise ValueError(f"Final terrain assignment violates bans: {tri}")
 
 
 if __name__ == "__main__":
