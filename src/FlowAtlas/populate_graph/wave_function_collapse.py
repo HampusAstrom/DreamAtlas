@@ -3,6 +3,7 @@ import networkx as nx
 from scipy.spatial import Voronoi, Delaunay
 
 from .terrain_graph import Element, TerrainGraph
+from .rule_management import RuleManager
 
 """
 ⚠️  WARNING: Wave Function Collapse Implementation INCOMPLETE ⚠️
@@ -138,21 +139,24 @@ def all_provNbor_set(graph: TerrainGraph):
     # Delegate to TerrainGraph's is_all_set method
     return graph.is_all_set()
 
-def calculate_joint_probability_distribution(element: Element, graph: TerrainGraph):
+def update_joint_probability_distribution(element: Element, graph: TerrainGraph):
     # calculate the joint probability distribution for the given element
     # (province or border) based on global and local factors
+    # and update the element's 'joint_prob_dist' entry with it
 
     # each contributing factor to the distribution is assumed to provide:
-    # a weight and a distribution
+    # a weight and a distribution of relative fractions (1.0 as default for each)
     # they may also provide a list of constraints (banned terrains)
 
     # combine the various factors into a single probability distribution
     # as a weighted average
     weights = element['dist_weights']
     # TODO replace with pointer to correct dict for provinces or borders TODO TODO TODO
-    joint_prob_dist = {terrain: 0.0 for terrain in graph.global_metrics.get('global_target_dist', {})}
+    joint_prob_dist = {terrain: 1.0 for terrain in graph.global_metrics.get('global_target_dist', {})}
     for name, dist in element['dists'].items(): # note, a pointer to the global dist should be included here as well
-        assert len(dist) == len(joint_prob_dist), f"Local dist {name} has different length than global_target_dist"
+        if len(dist) > len(joint_prob_dist):
+            extra_terrains = set(dist.keys()) - set(joint_prob_dist.keys())
+            raise ValueError(f"Local dist {name} has extra terrains not found in global_target_dist:\n{extra_terrains}")
         assert name in weights, f"Dist {name} for element {element} does not have a corresponding weight in dist_weights"
         weight = weights[name]
         for terrain, prob in dist.items():
@@ -176,7 +180,7 @@ def calculate_joint_probability_distribution(element: Element, graph: TerrainGra
         for terrain in joint_prob_dist:
             joint_prob_dist[terrain] = 1.0 / num_terrains
 
-    return joint_prob_dist
+    element['joint_prob_dist'] = joint_prob_dist
 
 def shannon_entropy(prob_dist: dict):
     # calculate the Shannon entropy of the given probability distribution
@@ -206,10 +210,7 @@ def select_element_to_set(graph: TerrainGraph) -> Element:
     lowest_entropy = float('inf')
 
     for element in graph.get_unset_elements():
-        # TODO, instead of calculating the joint probability distribution for each element here,
-        # we should store it in the element and only update it when needed, which should be much more efficient
-        joint_prob_dist = calculate_joint_probability_distribution(element, graph)
-        entropy = shannon_entropy(joint_prob_dist)
+        entropy = shannon_entropy(element['joint_prob_dist'])
 
         if entropy < lowest_entropy:
             lowest_entropy = entropy
@@ -227,40 +228,7 @@ def select_element_to_set(graph: TerrainGraph) -> Element:
 def select_element_terrain(element: Element, graph: TerrainGraph):
     # select a terrain for the given element (province or border) based on probabilities and constraints
 
-    # TODO, instead of calculating the joint probability distribution for each element here,
-    # we should store it in the element and only update it when needed, which should be much more efficient
-    joint_prob_dist = calculate_joint_probability_distribution(element, graph)
-    return np.random.choice(list(joint_prob_dist.keys()), p=list(joint_prob_dist.values()))
-
-def set_element_terrain(element: Element, terrain, graph: TerrainGraph):
-    # set the terrain for the given element (province or border) in the graph
-    element['terrain'] = terrain
-
-    update_statistics_and_probabilities(element, graph)
-
-def update_statistics_and_probabilities(origin_element: Element, graph: TerrainGraph):
-    # update any statistics and probabilities after setting an element's terrain
-
-    # update information about origin_element
-    # Update global counters
-    if origin_element.is_node:
-        graph.global_metrics['set_provinces'] = graph.global_metrics.get('set_provinces', 0) + 1
-    else:
-        graph.global_metrics['set_borders'] = graph.global_metrics.get('set_borders', 0) + 1
-
-    # update local counters that include the origin_element
-    # TODO
-
-    # determine all nearby elements that are affected by the setting of this element,
-    # and update their probabilities based on the new information
-    # this should probably call some method on the graph that returns the affected elements
-    # and then (for each) call a method with that takes the origin_element and
-    # the affected_element and updates them accordingly
-
-    # TODO we need to do a lot more here
-    # For now, just a placeholder that compiles
-    joint_prob_dist = calculate_joint_probability_distribution(origin_element, graph)
-    # TODO: update neighbor probabilities, constraint propagation, etc.
+    return np.random.choice(list(element['joint_prob_dist'].keys()), p=list(element['joint_prob_dist'].values()))
 
 
 class WaveFunctionCollapse:
@@ -281,15 +249,27 @@ class WaveFunctionCollapse:
         elif isinstance(graph, nx.Graph):
             print("Creating new TerrainGraph from provided nx.Graph (original graph will NOT be modified)")
 
-        self.graph = graph if isinstance(graph, TerrainGraph) else TerrainGraph.from_graph(graph)
+        self.graph = graph if isinstance(graph, TerrainGraph) else TerrainGraph.from_graph(graph, settings)
         # 0. setup any function overrides from settings
         self.collect_global_metrics = self.set_func(collect_global_metrics)
         self.determine_target_distributions = self.set_func(determine_target_distributions)
         self.preprocess_graph = self.set_func(preprocess_graph)
 
         # TODO in some cases we might want multiple modules as one function,
-        # we should then check for a list of function in settings if when it's a list
-        # it should wrap it and call all of them in order (before possibly merging results somehow)
+        # we should then check for a list of a yet to be named class instances in settings
+        # these need to have:
+        # - some way to determine at what range elements are affected by it
+        # - a method that takes in the affected element, the graph, and the origin element and:
+        #    - updates it's dist contribution (if it has any)§
+        #    - updates it's constraints contribution (if it has any)
+        self.update_dists_and_constraints_list = self.settings.get('update_dists_and_constraints_list', [])
+        # For each
+        for rule_manager in self.update_dists_and_constraints_list:
+            # TODO replace check with checking that it is an instance of the new class, when implemented
+            if not isinstance(rule_manager, RuleManager):
+                raise ValueError(f"Class {rule_manager} in update_dists_and_constraints_list is not an instance of RuleManager")
+            # TODO determine what params are needed to prep class, probably graph and possibly settings, maybe even a ref to WaveFunctionCollapse
+            rule_manager.setup()
 
         # 1. collect global metrics for graph
         collected_metrics = self.collect_global_metrics(self.graph, self.settings)
@@ -302,11 +282,8 @@ class WaveFunctionCollapse:
         # 3. preprocess incoming graph
         self.preprocess_graph(self.graph, self.settings)
 
-        # 4. start wave function collapse procedure
-        # TODO determine if wave_function_collapse() should be called in init or later
-        # TODO determine if we want to be able to step single steps in wave_function_collapse
-        # so it can be inspected more easily partway
-        # self.wave_function_collapse()
+        # 4. wave function collapse procedure can now be started by
+        # calling wave_function_collapse()
 
     # check if settnigs has override for defaiult functions, if not use default functions
     def set_func(self, default_func):
@@ -320,13 +297,66 @@ class WaveFunctionCollapse:
         else:
             return default_func
 
+    def set_element_terrain(self, element: Element, terrain, graph: TerrainGraph):
+        # set the terrain for the given element (province or border) in the graph
+        element['terrain'] = terrain
+
+        self.update_dists_and_constraints(element, graph)
+
+    def single_update_dists_and_constraints(self,
+                                            affected_element: Element,
+                                            origin_element: Element,
+                                            graph: TerrainGraph):
+        # TODO: update neighbor probabilities, constraint propagation, etc.
+        for rule_manager in self.update_dists_and_constraints_list:
+            rule_manager.update(affected_element, graph, origin_element)
+
+        # sum up dist contributions and constraints to get affected_elements new state
+        # could also update global/local varables based on it?
+
+        # TODO since we assume we have a global rule, it will require all nodes to be updated
+        # so we do so after all single updates are done
+        # update_joint_probability_distribution(affected_element, graph)
+
+    def update_dists_and_constraints(self, origin_element: Element, graph: TerrainGraph):
+        # update any statistics and probabilities after setting an element's terrain
+
+        # update information about origin_element
+        # Update global counters
+        if origin_element.is_node:
+            graph.global_metrics['set_provinces'] = graph.global_metrics.get('set_provinces', 0) + 1
+        else:
+            graph.global_metrics['set_borders'] = graph.global_metrics.get('set_borders', 0) + 1
+
+        # update local counters that include the origin_element
+        # TODO
+
+        # determine all nearby elements that are affected by the setting of this element,
+        # and update their probabilities based on the new information
+        # this should probably call some method on the graph that returns the affected elements
+        # and then (for each) call a method with that takes the origin_element and
+        # the affected_element and updates them accordingly
+
+        affected_elements = graph.get_elements_affected_by(origin_element)
+        for affected_element in affected_elements:
+            self.single_update_dists_and_constraints(affected_element, origin_element, graph)
+
+        # TODO since we assume we have a global rule, it will require all nodes to be updated
+        # so we do so after all single updates are done
+        for element in graph.get_unset_elements():
+            update_joint_probability_distribution(element, graph)
+
+
+    def step_wave_function_collapse(self):
+        # perform a single step of the wave function collapse process
+        element_to_set = select_element_to_set(self.graph)
+        terrain = select_element_terrain(element_to_set, self.graph)
+        self.set_element_terrain(element_to_set, terrain, self.graph)
+
     # the main control flow function for the wave function collapse process
     # taking in a graph and any settings and returning a graph with terrains set
     def wave_function_collapse(self) -> TerrainGraph:
         while not all_provNbor_set(self.graph):
-            # TODO consier if all these steps should be in one function
-            element_to_set = select_element_to_set(self.graph)
-            terrain = select_element_terrain(element_to_set, self.graph)
-            set_element_terrain(element_to_set, terrain, self.graph)
+            self.step_wave_function_collapse()
 
         return self.graph

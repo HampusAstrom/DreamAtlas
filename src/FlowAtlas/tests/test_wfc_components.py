@@ -21,7 +21,8 @@ class TestElement(unittest.TestCase):
 
     def setUp(self):
         """Create a simple TerrainGraph for testing."""
-        self.graph = TerrainGraph()
+        settings = {}
+        self.graph = TerrainGraph(settings)
         self.graph.add_node("A")
         self.graph.add_node("B")
         self.graph.add_edge("A", "B")
@@ -86,7 +87,8 @@ class TestTerrainGraphConversion(unittest.TestCase):
         original.add_node("X", data="value")
         original.add_edge("X", "Y", weight=5)
 
-        terrain_graph = TerrainGraph.from_graph(original)
+        settings = {}
+        terrain_graph = TerrainGraph.from_graph(original, settings)
 
         # Check that new graph exists
         self.assertIsInstance(terrain_graph, TerrainGraph)
@@ -105,7 +107,8 @@ class TestTerrainGraphConversion(unittest.TestCase):
         original.graph['name'] = 'test_graph'
         original.add_node("A")
 
-        terrain_graph = TerrainGraph.from_graph(original)
+        settings = {}
+        terrain_graph = TerrainGraph.from_graph(original, settings)
         self.assertEqual(terrain_graph.graph['name'], 'test_graph')
 
     def test_from_graph_rejects_self_loops(self):
@@ -114,11 +117,11 @@ class TestTerrainGraphConversion(unittest.TestCase):
         original.add_edge("A", "A")  # self-loop
 
         with self.assertRaises(ValueError):
-            TerrainGraph.from_graph(original)
+            TerrainGraph.from_graph(original, settings={})
 
     def test_terrain_graph_forbids_self_loops(self):
         """Test that TerrainGraph.add_edge rejects self-loops."""
-        graph = TerrainGraph()
+        graph = TerrainGraph(settings={})
         graph.add_node("A")
 
         with self.assertRaises(ValueError):
@@ -130,7 +133,8 @@ class TestTerrainGraphElementIteration(unittest.TestCase):
 
     def setUp(self):
         """Create a populated TerrainGraph."""
-        self.graph = TerrainGraph()
+        settings = {}
+        self.graph = TerrainGraph(settings=settings)
         self.graph.add_node("A", terrain="forest")
         self.graph.add_node("B", terrain=None)
         self.graph.add_node("C", terrain="water")
@@ -205,7 +209,7 @@ class TestTerrainGraphGlobalMetrics(unittest.TestCase):
 
     def test_terrain_graph_has_empty_metrics(self):
         """Test that new TerrainGraph has empty global_metrics."""
-        graph = TerrainGraph()
+        graph = TerrainGraph(settings={})
         self.assertIsInstance(graph.global_metrics, dict)
         self.assertEqual(len(graph.global_metrics), 0)
 
@@ -225,7 +229,7 @@ class TestWaveFunctionCollapseInitialization(unittest.TestCase):
 
     def test_wfc_accepts_terrain_graph(self):
         """Test WFC accepts TerrainGraph input."""
-        graph = TerrainGraph()
+        graph = TerrainGraph(settings={})
         graph.add_node("A")
         graph.add_node("B")
         graph.add_edge("A", "B")
@@ -250,7 +254,7 @@ class TestWaveFunctionCollapseInitialization(unittest.TestCase):
 
     def test_wfc_initializes_global_metrics(self):
         """Test that WFC initializes graph.global_metrics."""
-        graph = TerrainGraph()
+        graph = TerrainGraph(settings={})
         graph.add_node("A")
         graph.add_node("B")
         graph.add_edge("A", "B")
@@ -267,7 +271,7 @@ class TestSetupElementDists(unittest.TestCase):
 
     def setUp(self):
         """Create test graph and metrics."""
-        self.graph = TerrainGraph()
+        self.graph = TerrainGraph(settings={})
         self.graph.add_node("A")
         self.graph.add_node("B")
         self.graph.add_edge("A", "B")

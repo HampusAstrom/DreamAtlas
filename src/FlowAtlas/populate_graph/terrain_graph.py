@@ -100,20 +100,21 @@ class TerrainGraph(nx.Graph):
         global_metrics (dict): Global statistics and targets for the generation process
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, settings: dict, *args, **kwargs):
         """Initialize TerrainGraph; forbid self-loops by default."""
         super().__init__(*args, **kwargs)
+        self.settings = settings
         self.global_metrics = {}
 
     @classmethod
-    def from_graph(cls, graph: nx.Graph):
+    def from_graph(cls, graph: nx.Graph, settings: dict):
         """
         Create a TerrainGraph from an existing nx.Graph.
 
         Copies graph attributes, node attributes, and edge attributes.
         Self-loops are rejected by TerrainGraph.add_edge.
         """
-        terrain_graph = cls()
+        terrain_graph = cls(settings)
         terrain_graph.graph.update(graph.graph)
         terrain_graph.add_nodes_from(graph.nodes(data=True))
         terrain_graph.add_edges_from(graph.edges(data=True))
