@@ -4,6 +4,13 @@
 **Status**: INCOMPLETE - MVP CORE FUNCTIONALITY MISSING
 **Delete this file once you clear this checkpoint**
 
+## ADDED IMPORTANT TODOS
+- Set an random processes once, and make sure that instance is used consistently,
+  and determine if default should be a fixed seed or a random one
+- Make sure that all tests use fixed seeds, and if test for random behavior,
+  they should maybe (have an option to) run with a larger fixed set of seeds
+  (always if, they are few and short enough).
+
 ## Current State Summary
 
 The WFC system has a **basic structure in place** but is **deceptively half-complete**:
