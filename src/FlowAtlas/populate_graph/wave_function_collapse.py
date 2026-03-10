@@ -39,7 +39,9 @@ non-marked are planned expansions
     1.2 *# provinces, # borders
     1.3 nations and their preferences
     1.4 other?
-2. *determine target base terrain distributions (implied probabilities)
+2. *determine target base terrain distributions
+    implied probabilities in the form of relative fractions
+    1.0 means no relative change, do any preprocessing of dists not added in this format (might require flag)
     2.1 *global target_dist (implied prob) from:
         2.1.1 *base default
         2.1.2 settings
@@ -78,50 +80,7 @@ non-marked are planned expansions
         4.5.5 override and set by some base probability
     4.6 *repeat until all nodes are set
 
-Contributions to selection distribution, stored separately for easier update:
-* marking required parts for minimal prototype
-non-marked are planned expansions
-- *base adjusting_dist
-- local adjusting_dist (often distance weighted)
-    - might consider implied terrain impact on income balance
-      (gold (population), resources, gems) but those could be adjusted later
-    - some nations want some terrains in their perifery, but not in cap circle
-      some want at least 1 water next to cap, but not too many
-      these things should also be handled
-- *conditional probabilities from nearby set nodes/borders, base on:
-    - *distance (closer has more influence, most might only care about immediate neighbors)
-    - *terrains realism
-- pathing balance (intertwined with nearby nodes concept above, but might be separatable), looks at:
-    - province terrain impact on movement via terrain cost and special movement possibility like sailing
-    - border terrain impact on movement via pass/river crossing
-    keeping in mind:
-    - rivers can have bridges when needed to make sense for nature and still get pathing balance
-    - passes can be blocking, or big enough to be open
-      (thus not actually being a pass, but looking like one if d6m supprots it art wise)
-    - paths capital2capital
-        - each nation must have several options for a first war, at least three
-          ideally 4 or more reachable neighbour nations, though ease of reach
-          may vary and must not be symmetrical between the neighbour nations
-    - paths capital2thone (and compared to others for same throne)
-        - thrones should track reachability by it's nearby nations, and be
-          somewhat balance in how hard they are to reach of each such nation
-        - nations should have simular access to thrones, both in numbers and
-          reachability, but we shouldn't go overboard with balance (it makes
-          maps less varied and fun, and thrones are diffrently good anyway,
-          unless we can specify what exact throne each should be)
-    - base movement using human default
-    - national movement preferences and capabilities
-        - nations should get some benefit from their abilities,
-            but should it should not be too much, and they must be reachable
-            "normally" by other nations in most cases
-            (uw nations and island start nations being and exception)
-        - TODO we need to consider if this should look at nations
-            wider set of neighbour nation connections?
-        - maybe give less movement strong nations slightly higher chance of road,
-          both to compensate for problems and for the realism of them needing
-          it more, roads work both ways so it's not only beneficial
-    - TODO we could consider if we can balance movement benefits with province
-      "value" benefits (gold, resources, gems)
+
 
 The intention is that most components of this process should be modular
 so we can make a basic version and then add to it and replace and expand option
