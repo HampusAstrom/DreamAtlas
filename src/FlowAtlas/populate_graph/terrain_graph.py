@@ -12,9 +12,11 @@ Design principles:
 - Both stay lean; complex logic belongs in WaveFunctionCollapse
 """
 
-from typing import Any, Callable
+from collections.abc import Iterator
+from typing import Any, Callable, Generator
 
 import networkx as nx
+from networkx.classes.coreviews import AtlasView
 
 
 class Element:
@@ -106,6 +108,27 @@ class TerrainGraph(nx.Graph):
         self.settings = settings
         self.global_metrics = {}
 
+    def __iter__(self) -> Iterator[Element]:
+        """Iterate over all elements (nodes first, then edges)."""
+        yield from self.get_all_elements()
+
+    def __contains__(self, n: object) -> bool:
+        """Check if an element (node or edge) is in the graph."""
+        try:
+            assert isinstance(n, Element)
+            if n.is_node:
+                return n.element_id in self.nodes
+            else:
+                return n.element_id in self.edges
+        except TypeError:
+            return False
+
+    def __len__(self) -> int:
+        """Return total number of elements (nodes + edges)."""
+        return self.number_of_nodes() + self.number_of_edges()
+
+    # TODO consider if we want our own version of __getitem__ or not
+
     @classmethod
     def from_graph(cls, graph: nx.Graph, settings: dict):
         """
@@ -140,7 +163,7 @@ class TerrainGraph(nx.Graph):
                 )
         super().add_edges_from(ebunch_to_add, **attr)
 
-    def get_all_elements(self):
+    def get_all_elements(self) -> Generator[Element, Any, None]:
         """
         Yield all Element wrappers (nodes first, then edges).
 
@@ -152,7 +175,7 @@ class TerrainGraph(nx.Graph):
         for edge_id in self.edges:
             yield Element.from_edge(edge_id, self)
 
-    def iter_elements(self, data: bool | str = False, is_node: bool | None = None):
+    def iter_elements(self, data: bool | str = False, is_node: bool | None = None) -> Generator[Any, None, None]:
         """
         Iterate over elements with optional filtering and data payload.
 

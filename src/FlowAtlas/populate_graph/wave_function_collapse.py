@@ -262,14 +262,14 @@ class WaveFunctionCollapse:
         # - a method that takes in the affected element, the graph, and the origin element and:
         #    - updates it's dist contribution (if it has any)§
         #    - updates it's constraints contribution (if it has any)
-        self.update_dists_and_constraints_list = self.settings.get('update_dists_and_constraints_list', [])
+        self.rule_managers = self.settings.get('rule_managers', []) # type: list[RuleManager]
         # For each
-        for rule_manager in self.update_dists_and_constraints_list:
+        for rule_manager in self.rule_managers:
             # TODO replace check with checking that it is an instance of the new class, when implemented
             if not isinstance(rule_manager, RuleManager):
-                raise ValueError(f"Class {rule_manager} in update_dists_and_constraints_list is not an instance of RuleManager")
+                raise ValueError(f"Class {rule_manager} in rule_managers is not an instance of RuleManager")
             # TODO determine what params are needed to prep class, probably graph and possibly settings, maybe even a ref to WaveFunctionCollapse
-            rule_manager.setup()
+            rule_manager.setup(self.graph)
 
         # 1. collect global metrics for graph
         collected_metrics = self.collect_global_metrics(self.graph, self.settings)
@@ -303,13 +303,13 @@ class WaveFunctionCollapse:
 
         self.update_dists_and_constraints(element, graph)
 
-    def single_update_dists_and_constraints(self,
+    def affected_update_dists_and_constraints(self,
                                             affected_element: Element,
                                             origin_element: Element,
                                             graph: TerrainGraph):
         # TODO: update neighbor probabilities, constraint propagation, etc.
-        for rule_manager in self.update_dists_and_constraints_list:
-            rule_manager.update(affected_element, graph, origin_element)
+        for rule_manager in self.rule_managers:
+            rule_manager.update_affected(affected_element, graph, origin_element)
 
         # sum up dist contributions and constraints to get affected_elements new state
         # could also update global/local varables based on it?
@@ -323,13 +323,15 @@ class WaveFunctionCollapse:
 
         # update information about origin_element
         # Update global counters
+        # TODO consider removing in favour of using update_statistics for it too
         if origin_element.is_node:
             graph.global_metrics['set_provinces'] = graph.global_metrics.get('set_provinces', 0) + 1
         else:
             graph.global_metrics['set_borders'] = graph.global_metrics.get('set_borders', 0) + 1
 
         # update local counters that include the origin_element
-        # TODO
+        for rule_manager in self.rule_managers:
+            rule_manager.update_statistics_for_origin(graph, origin_element)
 
         # determine all nearby elements that are affected by the setting of this element,
         # and update their probabilities based on the new information
@@ -337,9 +339,11 @@ class WaveFunctionCollapse:
         # and then (for each) call a method with that takes the origin_element and
         # the affected_element and updates them accordingly
 
-        affected_elements = graph.get_elements_affected_by(origin_element)
-        for affected_element in affected_elements:
-            self.single_update_dists_and_constraints(affected_element, origin_element, graph)
+        # TODO TODO TODO later get only affected elements, for now we rely on the rules checking if they are relevant
+        # affected_elements = graph.get_elements_affected_by(origin_element)
+        unset_elements = graph.get_unset_elements() # TODO replace with get_elements_affected_by when implemented
+        for unset_element in unset_elements:
+            self.affected_update_dists_and_constraints(unset_element, origin_element, graph)
 
         # TODO since we assume we have a global rule, it will require all nodes to be updated
         # so we do so after all single updates are done

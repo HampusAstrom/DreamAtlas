@@ -1,5 +1,9 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, Callable
+from typing import Literal, Optional, Callable, Union
+from abc import ABC, abstractmethod
+from collections import defaultdict, Counter
+
+from .terrain_graph import Element, TerrainGraph
 
 """
 Contributions to selection distribution, stored separately for easier update:
@@ -57,49 +61,219 @@ We should make it so that writing one of the rules, will enforce both it and its
 
 
 """
+class Rule(ABC):
+    # base class for rules, mostly for type checking and organization
+    pass
 
-@dataclass
-class BanRule:
+    @abstractmethod
+    def setup(self, graph: TerrainGraph):
+        raise NotImplementedError("setup method must be implemented by subclasses of Rule")
+
+    @abstractmethod
+    def update_affected(self,
+                        affected_element: Element,
+                        graph: TerrainGraph,
+                        origin_element: Element):
+        raise NotImplementedError("update_affected method must be implemented by subclasses of Rule")
+
+    @abstractmethod
+    def update_statistics_for_origin(self,
+                                     graph: TerrainGraph,
+                                     origin_element: Element):
+        raise NotImplementedError("update_statistics_for_origin method must be implemented by subclasses of Rule")
+
+
+class BanRule(Rule):
     # count terrains of all set elements at/within range of an unset element,
     # counts for each terrain in set1 are given to evaluation function, if any returns true ->
     # all terrains in set2 are added to that elements ban list (0 prob.), and vice versa
-    set1: set
-    set2: set
-    range: float = 0.5
-    evaluation: Callable[[int, int], bool] = lambda count, total: count>0
-    range_type: Literal['topology', 'geography'] = 'topology'
-    range_check: Literal['eq','leq'] = 'eq' # just these for now, expand if needed
-    name: Optional[str] = None
 
+    def __init__(self,
+                 set1: set,
+                 set2: set,
+                 range: float = 0.5,
+                 evaluation: Callable[[int, int], bool] = lambda count, total: count>0,
+                 range_type: Literal['topology', 'geography'] = 'topology',
+                 range_check: Literal['eq','leq'] = 'eq', # just these for now, expand if needed
+                 name: Optional[str] = None):
+        self.set1 = set1
+        self.set2 = set2
+        self.range = range
+        self.evaluation = evaluation
+        self.range_type = range_type
+        self.range_check = range_check
+        self.name = name
 
-@dataclass
-class WeightRule:
-    # adds dists as constant dist for any it applies to
-    # if flags are used, dists is expected to have one subdict for each flag
-    # TODO handle weight by distance for for cap "region" type stuff
-    dists: dict
-    adjusting_factor: float # 1.0 for guarranteed dist match, 0.0 for fixed dist selection
-    weight: float = 1.0
-    # TODO determine if this should also have range, or if all affected are just marked with flag?
-    # range: float = 0.0
-    # range_type: Literal['topology', 'geography'] = 'topology'
-    # range_check: Literal['eq','leq'] = 'eq' # just these for now, expand if needed
-    flags: Optional[set] = None # if no flag(s), applies everywhere
-    name: Optional[str] = None
+    def setup(self, graph: TerrainGraph):
+        # for now we assume that Ban rules don't need any setup, but maybe they will later, so we keep the method here
+        pass
 
+    def update_affected(self,
+                        affected_element: Element,
+                        graph: TerrainGraph,
+                        origin_element: Element):
+        # TODO this is where the main work of BanRules happens TODO
+        pass
 
+    def update_statistics_for_origin(self,
+                                     graph: TerrainGraph,
+                                     origin_element: Element):
+        # for now we assume that Ban rules don't update based only on origin
+        pass
+
+class DistRule(Rule):
+    # tracks dists (distributions) for flags
+
+    def __init__(self,
+                 dist: dict,
+                 adjusting_factor: float = 1.0,
+                 flag: str = 'all',
+                 # TODO consider if flags should be dict, so we can store distance weights there,
+                 # or if we should just have a separate dict for distance weights in that case
+                 name: Optional[str] = None):
+        self.dist = dist
+        self.adjusting_factor = adjusting_factor # 1.0 for guarranteed dist match, 0.0 for fixed dist selection
+        self.flag = flag # defaults to all if not specified, meaning it applies to all elements
+        self.name = name
+
+        # metrics to keep track of
+        # TODO later we might want these to be weighted when local dists have uneven impact
+        self.target_province_sum = 0.0
+        self.target_border_sum = 0.0
+        self.assigned_province_attributes = Counter()
+        self.assigned_border_attributes = Counter()
+
+        # TODO handle weight by distance for for cap "region" type stuff
+        # weight: float = 1.0 # hmm, maybe just rely on RuleManager weight?
+        # TODO determine if this should also have range, or if all affected are just marked with flag?
+        # range: float = 0.0
+        # range_type: Literal['topology', 'geography'] = 'topology'
+        # range_check: Literal['eq','leq'] = 'eq' # just these for now, expand if needed
+
+    def setup(self, graph: TerrainGraph):
+        if self.flag == 'all':
+            for element in graph.get_all_elements():
+                # set flags for elements, value is a weight only used when flags
+                # can vary in strength, like with distance from a capital, 1.0 is default
+                if 'flags' not in element:
+                    element['flags'] = {'all': 1.0}
+                elif isinstance(element['flags'], dict):
+                    element['flags']['all'] = 1.0
+                else:
+                    raise ValueError(f"Element {element} has non-dict flags, cannot add 'all' flag for DistRule setup")
+
+                # gather starting metrics
+                is_node = element.is_node
+                if is_node:
+                    self.target_province_sum += 1.0
+                else:
+                    self.target_border_sum += 1.0
+
+                    # TODO we might want to handle all (already set metrics by just
+                    # collecting all assigned elements) in RuleManager and then let it
+                    # call update_statistics_for_origin and update_affected for each rule
+                    # if 'terrain' in element:
+                    #     self.assigned_province_attributes[element['terrain']] += 1
+        else:
+            raise NotImplementedError("Currently only 'all' flag is supported for DistRule setup, other cases are not implemented yet")
+        # TODO handle all other cases!!!
+
+    def update_affected(self,
+                        affected_element: Element,
+                        graph: TerrainGraph,
+                        origin_element: Element):
+        # for now we assume that DistRules don't to explicit updates for each affected element
+        pass
+
+    def update_statistics_for_origin(self,
+                                     graph: TerrainGraph,
+                                     origin_element: Element):
+        # TODO this is where the main work of DistRules happens TODO
+        pass
+
+# tracks a set of rules, and handles applying them to the graph when needed
+# mosly a middle layer to structure execution and make weighting easier
 class RuleManager:
-    def __init__(self, name, attribute='terrain'):
+    def __init__(self,
+                 name: str,
+                 rules: list[Rule],
+                 attribute: str ='terrain'):
 
         self.name = name
         self.base_weight = 1.0
-        self.attribute = attribute
+        self.attribute = attribute # assumed to be 'terrain' for now
+        self.rules = rules
 
+    # input params to be determined
+    # should mark elements with applicable flags (if 'all', add to all elements)
+    # should prep target_dist and adjusting_dist (for each rule) when used
+    def setup(self, graph: TerrainGraph):
+        for rule in self.rules:
+            rule.setup(graph)
+
+        # get all assigned elements, and update as if we just assigned them
+        already_assigned_elements = set()
+        for element in graph.get_all_elements():
+            if self.attribute in element:
+                already_assigned_elements.add(element)
 
     # update the dist and constraint entry for this rule in affected_element
     # using a set of rules from this manager
-    def update(self, affected_element, graph, origin_element):
-        pass
+    # should do:
+    # 1. check if it's rules applies to the affected element and attribute is None, if not return immediately
+    # 2. if it does, evaluate and update any dist contributions and bans for these rules in the affected element
+    def update_affected(self,
+                        affected_element: Element,
+                        graph: TerrainGraph,
+                        origin_element: Element):
+        for rule in self.rules:
+            rule.update_affected(affected_element, graph, origin_element)
 
-    def update_statistics(self, graph, origin_element):
-        pass
+    # for statistics, check if the origin_element has flags relevant for any rules of this manager
+    # returns a list of tuples of the form (rule, flags)
+    # def get_rules_by_flags(self, element: Element):
+    #     # get element flags and bail if none
+    #     element_flags = getattr(element, 'flags', None)
+    #     if element_flags is None:
+    #         return []
+    #     relevant_rules = list()
+    #     # gather each flagged rule, and return with relevant flags
+    #     for rule in self.rules:
+    #         flags = getattr(rule, 'flags', None)
+    #         if flags is None:
+    #             continue
+    #         per_rule_flags = []
+    #         for flag in flags:
+    #             if flag in element_flags:
+    #                 per_rule_flags.append(flag)
+    #         if per_rule_flags:
+    #             relevant_rules.append((rule, per_rule_flags))
+    #     return relevant_rules
+
+    # update any statistics that this rule manager uses for the origin element
+    # should return immediately if the origin element is not relevant for this rule manager
+    def update_statistics_for_origin(self, graph: TerrainGraph, origin_element: Element):
+        for rule in self.rules:
+            rule.update_statistics_for_origin(graph, origin_element)
+
+        # applicable_rules = self.get_rules_by_flags(origin_element)
+        # if not applicable_rules:
+        #     return
+        # # update the dist for each flag found
+
+
+        # get old dist from element, for now mostly for debugging
+        # old_dists = origin_element.get('dists', None)
+        # if old_dists:
+        #     old_dist = old_dists.get(self.name, None)
+        # else:
+        #     old_dist = None
+        # new_dist_components = []
+        # new_bans = set() # we don't expect bans from origin but maybe there are
+        # for rule, flags in applicable_rules:
+        #     dist_contrib = dict()
+        #     ban_contrib = set()
+        #     # TODO collect rule contributions
+
+        #     new_dist_components.append((rule.name, dist_contrib)) # names mostly tracked for debugging
+        #     new_bans.update(ban_contrib)
