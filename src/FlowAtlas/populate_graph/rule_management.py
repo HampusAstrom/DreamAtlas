@@ -1,7 +1,6 @@
-from dataclasses import dataclass
-from typing import Literal, Optional, Callable, Union
+from typing import Literal, Optional, Callable
 from abc import ABC, abstractmethod
-from collections import defaultdict, Counter
+from collections import Counter
 
 from .terrain_graph import Element, TerrainGraph
 
@@ -70,6 +69,13 @@ class Rule(ABC):
         raise NotImplementedError("setup method must be implemented by subclasses of Rule")
 
     @abstractmethod
+    def initialize_element(self,
+                           element: Element,
+                           graph: TerrainGraph,
+                           manager_weight: float):
+        raise NotImplementedError("initialize_element method must be implemented by subclasses of Rule")
+
+    @abstractmethod
     def update_affected(self,
                         affected_element: Element,
                         graph: TerrainGraph,
@@ -92,7 +98,7 @@ class BanRule(Rule):
                  set1: set,
                  set2: set,
                  range: float = 0.5,
-                 evaluation: Callable[[int, int], bool] = lambda count, total: count>0,
+                 evaluation: Callable[[list[Element]], bool] = lambda elements: len(elements) > 0,
                  range_type: Literal['topology', 'geography'] = 'topology',
                  range_check: Literal['eq','leq'] = 'eq', # just these for now, expand if needed
                  name: Optional[str] = None):
@@ -108,12 +114,21 @@ class BanRule(Rule):
         # for now we assume that Ban rules don't need any setup, but maybe they will later, so we keep the method here
         pass
 
+    def initialize_element(self,
+                           element: Element,
+                           graph: TerrainGraph,
+                           manager_weight: float):
+        return
+
     def update_affected(self,
                         affected_element: Element,
                         graph: TerrainGraph,
                         origin_element: Element):
-        # TODO this is where the main work of BanRules happens TODO
-        pass
+        raise NotImplementedError(
+            "BanRule.update_affected is intentionally deferred for the MVP. "
+            "Future implementation should evaluate a list of neighboring Elements "
+            "returned by a range-aware graph helper and apply symmetric set1<->set2 bans."
+        )
 
     def update_statistics_for_origin(self,
                                      graph: TerrainGraph,
@@ -125,21 +140,28 @@ class DistRule(Rule):
     # tracks dists (distributions) for flags
 
     def __init__(self,
-                 dist: dict,
+                 adjusting_province_dist: dict,
+                 adjusting_border_dist: dict,
                  adjusting_factor: float = 1.0,
                  flag: str = 'all',
                  # TODO consider if flags should be dict, so we can store distance weights there,
                  # or if we should just have a separate dict for distance weights in that case
                  name: Optional[str] = None):
-        self.dist = dist
+        # Shared references — mutate in-place to steer all province/border elements simultaneously.
+        self.adjusting_province_dist = adjusting_province_dist
+        self.adjusting_border_dist = adjusting_border_dist
+        # Immutable targets used to recompute adjusting dists as assignments accumulate.
+        self.target_province_dist = adjusting_province_dist.copy()
+        self.target_border_dist = adjusting_border_dist.copy()
         self.adjusting_factor = adjusting_factor # 1.0 for guarranteed dist match, 0.0 for fixed dist selection
         self.flag = flag # defaults to all if not specified, meaning it applies to all elements
         self.name = name
+        self.rule_key = name or f"{self.__class__.__name__}_{id(self)}"
 
         # metrics to keep track of
         # TODO later we might want these to be weighted when local dists have uneven impact
-        self.target_province_sum = 0.0
-        self.target_border_sum = 0.0
+        self.total_rule_provinces = 0.0
+        self.total_rule_borders = 0.0
         self.assigned_province_attributes = Counter()
         self.assigned_border_attributes = Counter()
 
@@ -158,6 +180,11 @@ class DistRule(Rule):
                 if 'flags' not in element:
                     element['flags'] = {'all': 1.0}
                 elif isinstance(element['flags'], dict):
+                    if 'all' in element['flags'] and element['flags']['all'] != 1.0:
+                        raise NotImplementedError(
+                            f"DistRule '{self.rule_key}' currently requires flag weight 1.0 for flag 'all', "
+                            f"got {element['flags']['all']} on {element}"
+                        )
                     element['flags']['all'] = 1.0
                 else:
                     raise ValueError(f"Element {element} has non-dict flags, cannot add 'all' flag for DistRule setup")
@@ -165,9 +192,9 @@ class DistRule(Rule):
                 # gather starting metrics
                 is_node = element.is_node
                 if is_node:
-                    self.target_province_sum += 1.0
+                    self.total_rule_provinces += 1.0
                 else:
-                    self.target_border_sum += 1.0
+                    self.total_rule_borders += 1.0
 
                     # TODO we might want to handle all (already set metrics by just
                     # collecting all assigned elements) in RuleManager and then let it
@@ -178,18 +205,88 @@ class DistRule(Rule):
             raise NotImplementedError("Currently only 'all' flag is supported for DistRule setup, other cases are not implemented yet")
         # TODO handle all other cases!!!
 
+    def initialize_element(self,
+                           element: Element,
+                           graph: TerrainGraph,
+                           manager_weight: float):
+        if self.flag != 'all':
+            raise NotImplementedError("Currently only 'all' flag is supported for DistRule initialization")
+
+        # Direct reference (not a copy): mutating shared adjusting dists in-place
+        # automatically steers all elements pointing to it without re-running initialize_element.
+        if element.is_province:
+            element['dists'][self.rule_key] = self.adjusting_province_dist
+        else:
+            element['dists'][self.rule_key] = self.adjusting_border_dist
+
+        element_flag_weight = element['flags'][self.flag]
+        if element_flag_weight != 1.0:
+            raise NotImplementedError(
+                f"DistRule '{self.rule_key}' currently requires flag weight 1.0 for all elements, got {element_flag_weight}"
+            )
+        element['dist_weights'][self.rule_key] = manager_weight * element_flag_weight
+
+    def _recompute_adjusting_dist(self,
+                                  element_kind: Literal['province', 'border']):
+        if element_kind == 'province':
+            target_dist = self.target_province_dist
+            assigned_counts = self.assigned_province_attributes
+            total_elements = self.total_rule_provinces
+            live_dist = self.adjusting_province_dist
+        else:
+            target_dist = self.target_border_dist
+            assigned_counts = self.assigned_border_attributes
+            total_elements = self.total_rule_borders
+            live_dist = self.adjusting_border_dist
+
+        if total_elements <= 0:
+            return
+
+        adjusting_dist = {}
+        for terrain, target_factor in target_dist.items():
+            current_count = assigned_counts.get(terrain, 0)
+            target_count = target_factor * total_elements
+            gap = target_count - current_count
+            adjustment_part = self.adjusting_factor * (gap / total_elements)
+            target_part = (1.0 - self.adjusting_factor) * target_factor
+            adjusted_factor = max(0.0, adjustment_part + target_part)
+            adjusting_dist[terrain] = adjusted_factor
+
+        total_adjusted = sum(adjusting_dist.values())
+        if total_adjusted > 0:
+            normalized = {terrain: weight / total_adjusted for terrain, weight in adjusting_dist.items()}
+        else:
+            n = len(adjusting_dist)
+            normalized = {terrain: 1.0 / n for terrain in adjusting_dist}
+
+        # Mutate in place so all elements holding this dict reference are updated immediately.
+        live_dist.clear()
+        live_dist.update(normalized)
+
     def update_affected(self,
                         affected_element: Element,
                         graph: TerrainGraph,
                         origin_element: Element):
-        # for now we assume that DistRules don't to explicit updates for each affected element
-        pass
+        # DistRule updates shared adjusting distributions in update_statistics_for_origin.
+        # Per-element updates are intentionally no-op for MVP while all rule weights are fixed at 1.0.
+        return
 
     def update_statistics_for_origin(self,
                                      graph: TerrainGraph,
                                      origin_element: Element):
-        # TODO this is where the main work of DistRules happens TODO
-        pass
+        # Track assignments and update shared adjusting distributions once per origin assignment.
+        if 'terrain' not in origin_element or origin_element['terrain'] is None:
+            return
+        terrain = origin_element['terrain']
+
+        # Update assignment counters based on element type
+        if origin_element.is_province:
+            self.assigned_province_attributes[terrain] += 1
+        else:
+            self.assigned_border_attributes[terrain] += 1
+
+        self._recompute_adjusting_dist('province')
+        self._recompute_adjusting_dist('border')
 
 # tracks a set of rules, and handles applying them to the graph when needed
 # mosly a middle layer to structure execution and make weighting easier
@@ -200,7 +297,7 @@ class RuleManager:
                  attribute: str ='terrain'):
 
         self.name = name
-        self.base_weight = 1.0
+        self.manager_weight = 1.0
         self.attribute = attribute # assumed to be 'terrain' for now
         self.rules = rules
 
@@ -211,11 +308,15 @@ class RuleManager:
         for rule in self.rules:
             rule.setup(graph)
 
-        # get all assigned elements, and update as if we just assigned them
-        already_assigned_elements = set()
+    def initialize_element_state(self, graph: TerrainGraph):
+        assert self.attribute == 'terrain', (
+            f"RuleManager '{self.name}' has unsupported attribute '{self.attribute}'. "
+            "Only attribute='terrain' is currently supported."
+        )
+
         for element in graph.get_all_elements():
-            if self.attribute in element:
-                already_assigned_elements.add(element)
+            for rule in self.rules:
+                rule.initialize_element(element, graph, self.manager_weight)
 
     # update the dist and constraint entry for this rule in affected_element
     # using a set of rules from this manager

@@ -3,7 +3,7 @@ import networkx as nx
 from scipy.spatial import Voronoi, Delaunay
 
 from .terrain_graph import Element, TerrainGraph
-from .rule_management import RuleManager
+from .rule_management import RuleManager, DistRule
 
 """
 ⚠️  WARNING: Wave Function Collapse Implementation INCOMPLETE ⚠️
@@ -107,78 +107,85 @@ def collect_global_metrics(graph: TerrainGraph, settings: dict):
     return ret
 
 def determine_target_distributions(graph: TerrainGraph, settings: dict):
-    # determine the target terrain distribution based on global metrics and settings
-    assert 'base_global_target_dist' in settings
-    assert 'base_global_weight' in settings
+    # Option B: global metrics hold only valid terrain domains.
+    # Probability distributions are owned by rules.
+    assert 'base_terrain_domain' in settings, (
+        "settings must include 'base_terrain_domain' with keys "
+        "'province_terrains' and 'border_terrains'"
+    )
 
-    global_metrics = graph.global_metrics
+    domain = settings['base_terrain_domain']
+    assert isinstance(domain, dict), "base_terrain_domain must be a dict"
+    assert 'province_terrains' in domain, "base_terrain_domain must include 'province_terrains'"
+    assert 'border_terrains' in domain, "base_terrain_domain must include 'border_terrains'"
 
-    print("determining target distributions, currently just using base global target dist from settings")
-    # TODO determine if base_global_target_dist  and base_global_weight should be a copy or pointer
-    global_metrics['global_target_dist'] = settings['base_global_target_dist']
-    global_metrics['global_target_weight'] = settings['base_global_weight']
-    global_metrics['global_adjusting_dist'] = global_metrics.get('global_target_dist', {}).copy()
+    province_terrains = domain['province_terrains']
+    border_terrains = domain['border_terrains']
+    assert isinstance(province_terrains, (list, tuple)), "province_terrains must be a list/tuple"
+    assert isinstance(border_terrains, (list, tuple)), "border_terrains must be a list/tuple"
+    assert len(province_terrains) > 0, "province_terrains must not be empty"
+    assert len(border_terrains) > 0, "border_terrains must not be empty"
 
-
-    # TODO setup national target_dist and adjusting_dist
-    # set global dists as a weighted average of national dists and
-    # a base global dist
+    graph.global_metrics['terrain_domain'] = {
+        'province_terrains': tuple(province_terrains),
+        'border_terrains': tuple(border_terrains),
+    }
 
 def preprocess_graph(graph: TerrainGraph, settings: dict):
-    # preprocess the graph, checking for any predefined values and calculating initial statistics
+    # preprocess hook kept for settings override compatibility.
+    # solver state initialization now lives in WaveFunctionCollapse.
+    return
 
-    print("preprocessing graph, currently we:")
-    print("- cleaning any existing terrain values from graph, and setting to None and warning")
-    print("- add a 'pointer' to global_adjusting_dist in dict 'dists' for element (node/province and edge/border), making sure to use the respective dicts for each only")
 
-    # Use TerrainGraph's built-in setup method
-    graph.setup_element_dists()
-
-def all_provNbor_set(graph: TerrainGraph):
-    # check if all provinces and borders in the graph have their terrain set
-    # Delegate to TerrainGraph's is_all_set method
-    return graph.is_all_set()
+def get_element_terrain_domain(element: Element, graph: TerrainGraph) -> tuple:
+    domain = graph.global_metrics['terrain_domain']
+    if element.is_province:
+        return domain['province_terrains']
+    return domain['border_terrains']
 
 def update_joint_probability_distribution(element: Element, graph: TerrainGraph):
     # calculate the joint probability distribution for the given element
-    # (province or border) based on global and local factors
-    # and update the element's 'joint_prob_dist' entry with it
+    # (province or border) using multiplicative relative-factor composition
+    # across all rule contributions and constraints.
 
-    # each contributing factor to the distribution is assumed to provide:
-    # a weight and a distribution of relative fractions (1.0 as default for each)
-    # they may also provide a list of constraints (banned terrains)
+    # Multiplicative relative-factor model:
+    # Each rule provides a blended distribution (result of dist_weight * adjusting_dist + (1-dist_weight)*uniform)
+    # Join these by multiplying the relative factors for each terrain across all rules
+    # This way, terrains favored by multiple rules get exponentially higher weight
 
-    # combine the various factors into a single probability distribution
-    # as a weighted average
     weights = element['dist_weights']
-    # TODO replace with pointer to correct dict for provinces or borders TODO TODO TODO
-    joint_prob_dist = {terrain: 1.0 for terrain in graph.global_metrics.get('global_target_dist', {})}
-    for name, dist in element['dists'].items(): # note, a pointer to the global dist should be included here as well
-        if len(dist) > len(joint_prob_dist):
-            extra_terrains = set(dist.keys()) - set(joint_prob_dist.keys())
-            raise ValueError(f"Local dist {name} has extra terrains not found in global_target_dist:\n{extra_terrains}")
-        assert name in weights, f"Dist {name} for element {element} does not have a corresponding weight in dist_weights"
-        weight = weights[name]
-        for terrain, prob in dist.items():
-            assert terrain in joint_prob_dist, f"Terrain {terrain} from local dist {name} not found in global_target_dist"
-            joint_prob_dist[terrain] += prob * weight
+    terrain_domain = get_element_terrain_domain(element, graph)
 
-    # apply constraints
+    # Start with relative factor 1.0 for each terrain (neutral)
+    joint_factors = {terrain: 1.0 for terrain in terrain_domain}
+
+    # Multiply in contributions from each rule
+    for name, dist in element['dists'].items():  # note, a pointer to the rule's shared dist object
+        if len(dist) > len(joint_factors):
+            extra_terrains = set(dist.keys()) - set(joint_factors.keys())
+            raise ValueError(f"Local dist {name} has extra terrains not found in terrain domain:\n{extra_terrains}")
+        assert name in weights, f"Dist {name} for element {element} does not have a corresponding weight in dist_weights"
+
+        # dist is already the blended result from update_affected (or from initialize_element)
+        # Treat it as a relative-factor contribution: normalize it and multiply into joint_factors
+        for terrain, factor in dist.items():
+            assert terrain in joint_factors, f"Terrain {terrain} from local dist {name} not found in terrain domain"
+            joint_factors[terrain] *= factor
+
+    # apply constraints (zero out banned terrains)
     for name, constraint in element['constraints'].items():
         for terrain, ban in constraint.items():
             if ban:
-                joint_prob_dist[terrain] = 0.0
+                joint_factors[terrain] = 0.0
 
     # normalize the joint probability distribution to sum to 1
-    sum_probs = sum(joint_prob_dist.values())
-    if sum_probs > 0:
-        for terrain in joint_prob_dist:
-            joint_prob_dist[terrain] /= sum_probs
+    sum_factors = sum(joint_factors.values())
+    if sum_factors > 0:
+        joint_prob_dist = {terrain: f / sum_factors for terrain, f in joint_factors.items()}
     else:
-        print(f"warning: joint probability distribution for element {element} has sum of zero, using uniform distribution")
-        num_terrains = len(joint_prob_dist)
-        for terrain in joint_prob_dist:
-            joint_prob_dist[terrain] = 1.0 / num_terrains
+        print(f"warning: joint probability distribution for element {element} has sum of zero or less, using uniform distribution")
+        num_terrains = len(joint_factors)
+        joint_prob_dist = {terrain: 1.0 / num_terrains for terrain in joint_factors}
 
     element['joint_prob_dist'] = joint_prob_dist
 
@@ -250,10 +257,15 @@ class WaveFunctionCollapse:
             print("Creating new TerrainGraph from provided nx.Graph (original graph will NOT be modified)")
 
         self.graph = graph if isinstance(graph, TerrainGraph) else TerrainGraph.from_graph(graph, settings)
+
         # 0. setup any function overrides from settings
         self.collect_global_metrics = self.set_func(collect_global_metrics)
         self.determine_target_distributions = self.set_func(determine_target_distributions)
         self.preprocess_graph = self.set_func(preprocess_graph)
+
+        # 1. capture and scrub pre-set terrains so replay uses the same runtime path
+        preset_assignments = self._snapshot_preset_terrains()
+        self._scrub_all_terrains()
 
         # TODO in some cases we might want multiple modules as one function,
         # we should then check for a list of a yet to be named class instances in settings
@@ -268,21 +280,35 @@ class WaveFunctionCollapse:
             # TODO replace check with checking that it is an instance of the new class, when implemented
             if not isinstance(rule_manager, RuleManager):
                 raise ValueError(f"Class {rule_manager} in rule_managers is not an instance of RuleManager")
-            # TODO determine what params are needed to prep class, probably graph and possibly settings, maybe even a ref to WaveFunctionCollapse
-            rule_manager.setup(self.graph)
-
-        # 1. collect global metrics for graph
+        # 2. collect global metrics for graph
         collected_metrics = self.collect_global_metrics(self.graph, self.settings)
         assert isinstance(collected_metrics, dict), "collect_global_metrics should return a dict of global metrics"
         self.graph.global_metrics = collected_metrics
 
-        # 2. determine target base terrain distributions
+        # 3. determine target base terrain distributions
         self.determine_target_distributions(self.graph, self.settings)
 
-        # 3. preprocess incoming graph
+        # 4. preprocess incoming graph (optional hook)
         self.preprocess_graph(self.graph, self.settings)
 
-        # 4. wave function collapse procedure can now be started by
+        # 5. initialize per-element solver containers before rule setup
+        self._initialize_element_solver_state()
+
+        # 6. run static rule setup
+        for rule_manager in self.rule_managers:
+            rule_manager.setup(self.graph)
+
+        # 7. let rules seed their own per-element contributions
+        for rule_manager in self.rule_managers:
+            rule_manager.initialize_element_state(self.graph)
+
+        # 8. replay pre-set values via normal assignment update path
+        self._replay_preset_terrains(preset_assignments)
+
+        # 9. ensure unset elements have fresh joint distributions
+        self.refresh_joint_probabilities()
+
+        # 10. wave function collapse procedure can now be started by
         # calling wave_function_collapse()
 
     # check if settnigs has override for defaiult functions, if not use default functions
@@ -297,41 +323,55 @@ class WaveFunctionCollapse:
         else:
             return default_func
 
-    def set_element_terrain(self, element: Element, terrain, graph: TerrainGraph):
+    def _snapshot_preset_terrains(self) -> list[tuple[Element, object]]:
+        preset_assignments = []
+        for element in self.graph.get_all_elements():
+            terrain = element.get('terrain', None)
+            if terrain is not None:
+                preset_assignments.append((element, terrain))
+        return preset_assignments
+
+    def _scrub_all_terrains(self):
+        for element in self.graph.get_all_elements():
+            if element.get('terrain', None) is not None:
+                element['terrain'] = None
+
+    def _initialize_element_solver_state(self):
+        for element in self.graph.get_all_elements():
+            if 'dists' not in element or not isinstance(element['dists'], dict):
+                element['dists'] = {}
+            if 'dist_weights' not in element or not isinstance(element['dist_weights'], dict):
+                element['dist_weights'] = {}
+            if 'constraints' not in element or not isinstance(element['constraints'], dict):
+                element['constraints'] = {}
+            if 'flags' not in element or not isinstance(element['flags'], dict):
+                element['flags'] = {}
+
+            element['joint_prob_dist'] = {}
+
+    def _replay_preset_terrains(self, preset_assignments: list[tuple[Element, object]]):
+        for element, terrain in preset_assignments:
+            self.set_element_terrain(element, terrain)
+
+    def set_element_terrain(self, element: Element, terrain):
         # set the terrain for the given element (province or border) in the graph
         element['terrain'] = terrain
+        self.apply_assignment_updates(element)
 
-        self.update_dists_and_constraints(element, graph)
-
-    def affected_update_dists_and_constraints(self,
-                                            affected_element: Element,
-                                            origin_element: Element,
-                                            graph: TerrainGraph):
-        # TODO: update neighbor probabilities, constraint propagation, etc.
-        for rule_manager in self.rule_managers:
-            rule_manager.update_affected(affected_element, graph, origin_element)
-
-        # sum up dist contributions and constraints to get affected_elements new state
-        # could also update global/local varables based on it?
-
-        # TODO since we assume we have a global rule, it will require all nodes to be updated
-        # so we do so after all single updates are done
-        # update_joint_probability_distribution(affected_element, graph)
-
-    def update_dists_and_constraints(self, origin_element: Element, graph: TerrainGraph):
+    def apply_assignment_updates(self, origin_element: Element):
         # update any statistics and probabilities after setting an element's terrain
 
         # update information about origin_element
         # Update global counters
         # TODO consider removing in favour of using update_statistics for it too
         if origin_element.is_node:
-            graph.global_metrics['set_provinces'] = graph.global_metrics.get('set_provinces', 0) + 1
+            self.graph.global_metrics['set_provinces'] = self.graph.global_metrics.get('set_provinces', 0) + 1
         else:
-            graph.global_metrics['set_borders'] = graph.global_metrics.get('set_borders', 0) + 1
+            self.graph.global_metrics['set_borders'] = self.graph.global_metrics.get('set_borders', 0) + 1
 
         # update local counters that include the origin_element
         for rule_manager in self.rule_managers:
-            rule_manager.update_statistics_for_origin(graph, origin_element)
+            rule_manager.update_statistics_for_origin(self.graph, origin_element)
 
         # determine all nearby elements that are affected by the setting of this element,
         # and update their probabilities based on the new information
@@ -340,27 +380,78 @@ class WaveFunctionCollapse:
         # the affected_element and updates them accordingly
 
         # TODO TODO TODO later get only affected elements, for now we rely on the rules checking if they are relevant
-        # affected_elements = graph.get_elements_affected_by(origin_element)
-        unset_elements = graph.get_unset_elements() # TODO replace with get_elements_affected_by when implemented
+        # affected_elements = self.graph.get_elements_affected_by(origin_element)
+        unset_elements = self.graph.get_unset_elements() # TODO replace with get_elements_affected_by when implemented
         for unset_element in unset_elements:
-            self.affected_update_dists_and_constraints(unset_element, origin_element, graph)
+            for rule_manager in self.rule_managers:
+                rule_manager.update_affected(unset_element, self.graph, origin_element)
 
-        # TODO since we assume we have a global rule, it will require all nodes to be updated
-        # so we do so after all single updates are done
-        for element in graph.get_unset_elements():
-            update_joint_probability_distribution(element, graph)
+        self.refresh_joint_probabilities()
+        # TODO nice-to-have: optional debug-only contradiction checks.
+
+    def refresh_joint_probabilities(self):
+        for element in self.graph.get_unset_elements():
+            update_joint_probability_distribution(element, self.graph)
 
 
     def step_wave_function_collapse(self):
         # perform a single step of the wave function collapse process
         element_to_set = select_element_to_set(self.graph)
         terrain = select_element_terrain(element_to_set, self.graph)
-        self.set_element_terrain(element_to_set, terrain, self.graph)
+        self.set_element_terrain(element_to_set, terrain)
 
     # the main control flow function for the wave function collapse process
     # taking in a graph and any settings and returning a graph with terrains set
     def wave_function_collapse(self) -> TerrainGraph:
-        while not all_provNbor_set(self.graph):
+        while not self.graph.is_all_set():
             self.step_wave_function_collapse()
 
         return self.graph
+
+
+def make_wfc_settings_from_global_dist(settings: dict) -> dict:
+    """
+    Parse a 'base_global_target_dist' settings entry into WFC-ready settings.
+
+    Converts the user-friendly global distribution format into the internal
+    representation needed by WaveFunctionCollapse: a terrain domain and a
+    RuleManager with a DistRule seeded from the provided distributions.
+
+    Expected input key in settings:
+        'base_global_target_dist': {
+            'province_terrains': {terrain_name: weight, ...},
+            'border_terrains':   {terrain_name: weight, ...},
+        }
+
+    Produces (merged into the returned settings dict):
+        'base_terrain_domain': {'province_terrains': [...], 'border_terrains': [...]},
+        'rule_managers': existing_managers + [RuleManager wrapping a global DistRule],
+    """
+    assert 'base_global_target_dist' in settings, (
+        "make_wfc_settings_from_global_dist expects 'base_global_target_dist' in settings"
+    )
+    base_dist = settings['base_global_target_dist']
+    assert 'province_terrains' in base_dist, "base_global_target_dist must include 'province_terrains'"
+    assert 'border_terrains' in base_dist, "base_global_target_dist must include 'border_terrains'"
+
+    adjusting_province_dist = base_dist['province_terrains']
+    adjusting_border_dist = base_dist['border_terrains']
+
+    terrain_domain = {
+        'province_terrains': list(adjusting_province_dist.keys()),
+        'border_terrains': list(adjusting_border_dist.keys()),
+    }
+
+    global_rule = DistRule(
+        adjusting_province_dist=adjusting_province_dist,
+        adjusting_border_dist=adjusting_border_dist,
+        name='global_dist_rule',
+    )
+    global_manager = RuleManager(name='global_dist', rules=[global_rule])
+
+    existing_managers = settings.get('rule_managers', [])
+    return {
+        **settings,
+        'base_terrain_domain': terrain_domain,
+        'rule_managers': existing_managers + [global_manager],
+    }

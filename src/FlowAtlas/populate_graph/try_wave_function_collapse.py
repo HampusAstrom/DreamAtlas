@@ -1,3 +1,5 @@
+from FlowAtlas.populate_graph.wave_function_collapse import WaveFunctionCollapse, make_wfc_settings_from_global_dist
+
 settings = {
     # this test config includes all normal single terrain types on the surface layer
     # but no cave terrain or special stuff we might want to add later
@@ -35,3 +37,14 @@ settings = {
         }
     }
 }
+
+# Parse the global dist into WFC-ready settings: extracts terrain domains and creates a DistRule/RuleManager.
+wfc_settings = make_wfc_settings_from_global_dist(settings)
+
+# Example usage:
+# import networkx as nx
+# graph = nx.Graph()
+# graph.add_nodes_from([...])
+# graph.add_edges_from([...])
+# wfc = WaveFunctionCollapse(wfc_settings, graph)
+# result = wfc.wave_function_collapse()

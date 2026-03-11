@@ -16,7 +16,6 @@ from collections.abc import Iterator
 from typing import Any, Callable, Generator
 
 import networkx as nx
-from networkx.classes.coreviews import AtlasView
 
 
 class Element:
@@ -52,6 +51,16 @@ class Element:
             return self.graph.nodes[self.element_id]
         else:
             return self.graph.edges[self.element_id]
+
+    @property
+    def is_province(self) -> bool:
+        """True if this element represents a province (node)."""
+        return self.is_node
+
+    @property
+    def is_border(self) -> bool:
+        """True if this element represents a border (edge)."""
+        return not self.is_node
 
     def __getitem__(self, key):
         """Get an attribute value."""
@@ -226,6 +235,9 @@ class TerrainGraph(nx.Graph):
             Use mode='topology' for MVP behavior.
             mode='geography' is intentionally not implemented yet to avoid
             silently returning incorrect semantics.
+            Future design needs to decide whether this API should also support
+            filtering by distance / element type directly, and whether returned
+            Elements should optionally include an explicit range/distance value.
         """
         if mode == 'topology':
             return self.get_connected_elements_topology(element, edge_scope=topology_edge_scope)
@@ -241,6 +253,16 @@ class TerrainGraph(nx.Graph):
     def get_connected_elements_topology(self, element: Element, edge_scope: str = 'distance_leq_1') -> dict[str, Any]:
         """
         Return topology-connected elements for a node or edge element.
+
+        TODO:
+            This API currently returns Elements grouped under 'nodes' and 'edges',
+            which is useful but also mixes wrapper-level and graph-primitive concepts.
+            Revisit whether this method should:
+            - return per-element distance/range metadata,
+            - accept filtering arguments (distance threshold, nodes only, edges only),
+            - or delegate more of that filtering to iter_elements/filter_elements.
+            The intended division of responsibility among these APIs should be
+            clarified before BanRule range semantics are implemented.
 
         Node element:
             - nodes: neighboring node Elements
@@ -350,50 +372,3 @@ class TerrainGraph(nx.Graph):
             if element.get('terrain', None) is None:
                 return False
         return True
-
-    def setup_element_dists(self, reset_existing_terrain: bool = True):
-        """
-        Initialize element attributes needed for wave function collapse.
-
-        Sets up 'dists' pointers for each element so they stay in sync with
-        global_adjusting_dist when it's updated.
-
-        Args:
-            reset_existing_terrain: If False, preserves any pre-set terrain values.
-                WARNING: When False, you MUST ensure that global_metrics counters
-                (set_provinces, set_borders), element dists, weights, and constraints
-                are all properly initialized for the pre-set elements. Currently,
-                this function does NOT handle such initialization.
-                TODO: Implement full initialization logic for pre-seeded terrains
-                (update counters, compute initial dists/weights/constraints).
-        """
-        if not reset_existing_terrain:
-            print("Warning: setup_element_dists called with reset_existing_terrain=False. "
-                  "Preserving existing terrain values, but global_metrics counters"
-                  "and element dists/weights/constraints may be inconsistent. "
-                  "Make sure to initialize those properly for pre-set elements.")
-
-        if 'global_adjusting_dist' not in self.global_metrics:
-            return
-
-        global_dist = self.global_metrics['global_adjusting_dist']
-        province_terrains = global_dist.get('province_terrains', {})
-        border_terrains = global_dist.get('border_terrains', {})
-
-        for element in self.get_all_elements():
-            if 'dists' not in element:
-                element['dists'] = {}
-
-            # Store pointer to appropriate dist type
-            if element.is_node:
-                element['dists']['global_adjusting_dist'] = province_terrains
-            else:
-                element['dists']['global_adjusting_dist'] = border_terrains
-
-            # Optional cleanup of any stale terrain values.
-            # Callers can disable this when pre-seeded terrain should be preserved.
-            if reset_existing_terrain and element.get('terrain', None) is not None:
-                print(f"Warning: element {element} already has terrain {element.get('terrain')}, resetting to None")
-                element['terrain'] = None
-
-            # TODO determine if we need to clean other values
