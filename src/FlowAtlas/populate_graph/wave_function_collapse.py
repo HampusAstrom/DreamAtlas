@@ -174,8 +174,8 @@ def update_joint_probability_distribution(element: Element, graph: TerrainGraph)
 
     # apply constraints (zero out banned terrains)
     for name, constraint in element['constraints'].items():
-        for terrain, ban in constraint.items():
-            if ban:
+        for terrain in constraint:
+            if terrain in joint_factors:
                 joint_factors[terrain] = 0.0
 
     # normalize the joint probability distribution to sum to 1
@@ -409,13 +409,41 @@ class WaveFunctionCollapse:
         return self.graph
 
 
-def make_wfc_settings_from_global_dist(settings: dict) -> dict:
+def convert_dist_to_relative_factors(dist: dict) -> dict:
+    """
+    Convert frequency weights to multiplicative relative factors.
+
+    Args:
+        dist: {terrain_name: frequency_weight, ...}
+
+    Returns:
+        {terrain_name: relative_factor, ...}
+
+    Notes:
+        WFC combines rule distributions multiplicatively, so a uniform
+        distribution should contribute neutral factors (1.0 for each terrain).
+        We therefore normalize by the mean weight, not by the total sum.
+    """
+    if len(dist) == 0:
+        raise ValueError("Distribution must contain at least one terrain")
+
+    total = sum(dist.values())
+    mean_weight = total / len(dist)
+    if mean_weight <= 0:
+        raise ValueError(f"Distribution mean weight must be > 0, got {mean_weight}")
+
+    return {terrain: weight / mean_weight for terrain, weight in dist.items()}
+
+
+def make_wfc_settings_from_global_dist(settings: dict, include_global_dist_rule: bool = True) -> dict:
     """
     Parse a 'base_global_target_dist' settings entry into WFC-ready settings.
 
     Converts the user-friendly global distribution format into the internal
     representation needed by WaveFunctionCollapse: a terrain domain and a
     RuleManager with a DistRule seeded from the provided distributions.
+
+    Distributions are automatically converted to multiplicative relative factors.
 
     Expected input key in settings:
         'base_global_target_dist': {
@@ -425,7 +453,7 @@ def make_wfc_settings_from_global_dist(settings: dict) -> dict:
 
     Produces (merged into the returned settings dict):
         'base_terrain_domain': {'province_terrains': [...], 'border_terrains': [...]},
-        'rule_managers': existing_managers + [RuleManager wrapping a global DistRule],
+        'rule_managers': existing_managers (+ global DistRule manager by default),
     """
     assert 'base_global_target_dist' in settings, (
         "make_wfc_settings_from_global_dist expects 'base_global_target_dist' in settings"
@@ -434,24 +462,29 @@ def make_wfc_settings_from_global_dist(settings: dict) -> dict:
     assert 'province_terrains' in base_dist, "base_global_target_dist must include 'province_terrains'"
     assert 'border_terrains' in base_dist, "base_global_target_dist must include 'border_terrains'"
 
-    adjusting_province_dist = base_dist['province_terrains']
-    adjusting_border_dist = base_dist['border_terrains']
+    # Convert input distributions to multiplicative relative factors.
+    adjusting_province_dist = convert_dist_to_relative_factors(base_dist['province_terrains'])
+    adjusting_border_dist = convert_dist_to_relative_factors(base_dist['border_terrains'])
 
     terrain_domain = {
         'province_terrains': list(adjusting_province_dist.keys()),
         'border_terrains': list(adjusting_border_dist.keys()),
     }
 
-    global_rule = DistRule(
-        adjusting_province_dist=adjusting_province_dist,
-        adjusting_border_dist=adjusting_border_dist,
-        name='global_dist_rule',
-    )
-    global_manager = RuleManager(name='global_dist', rules=[global_rule])
-
     existing_managers = settings.get('rule_managers', [])
+    if include_global_dist_rule:
+        global_rule = DistRule(
+            adjusting_province_dist=adjusting_province_dist,
+            adjusting_border_dist=adjusting_border_dist,
+            name='global_dist_rule',
+        )
+        global_manager = RuleManager(name='global_dist', rules=[global_rule])
+        final_managers = existing_managers + [global_manager]
+    else:
+        final_managers = existing_managers
+
     return {
         **settings,
         'base_terrain_domain': terrain_domain,
-        'rule_managers': existing_managers + [global_manager],
+        'rule_managers': final_managers,
     }

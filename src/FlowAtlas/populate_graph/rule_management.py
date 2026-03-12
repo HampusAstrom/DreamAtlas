@@ -1,8 +1,11 @@
-from typing import Literal, Optional, Callable
+from typing import Literal, Optional, Callable, TypeAlias
 from abc import ABC, abstractmethod
 from collections import Counter
 
 from .terrain_graph import Element, TerrainGraph
+
+RangeType: TypeAlias = Literal['topology', 'geography']
+RangeCheck: TypeAlias = Literal['eq', 'leq']
 
 """
 Contributions to selection distribution, stored separately for easier update:
@@ -88,6 +91,13 @@ class Rule(ABC):
                                      origin_element: Element):
         raise NotImplementedError("update_statistics_for_origin method must be implemented by subclasses of Rule")
 
+# TODO make new rule, or add support for the following behaviour in existing rules:
+# dists determined by local neighborhood without flags, like BanRule
+# but instead of banning terrains, it adjusts a local dist_contrbution
+# it should take an evaluation function, range_type and range_check
+# passing all neighboring elements that match the range_type and range_check
+# to the evaluation function, and then use the result to determine
+# how to adjust the local dist contribution for this rule
 
 class BanRule(Rule):
     # count terrains of all set elements at/within range of an unset element,
@@ -98,17 +108,20 @@ class BanRule(Rule):
                  set1: set,
                  set2: set,
                  range: float = 0.5,
-                 evaluation: Callable[[list[Element]], bool] = lambda elements: len(elements) > 0,
-                 range_type: Literal['topology', 'geography'] = 'topology',
-                 range_check: Literal['eq','leq'] = 'eq', # just these for now, expand if needed
+                 evaluation: Callable[[list], bool] = lambda set_elements: len(set_elements) > 0,
+                 range_type: RangeType = 'topology',
+                 range_check: RangeCheck = 'eq', # just these for now, expand if needed
+                 include_distance: bool = False,
                  name: Optional[str] = None):
         self.set1 = set1
         self.set2 = set2
         self.range = range
         self.evaluation = evaluation
-        self.range_type = range_type
-        self.range_check = range_check
+        self.range_type: RangeType = range_type
+        self.range_check: RangeCheck = range_check
+        self.include_distance: bool = include_distance
         self.name = name
+        self.rule_key = name or f"{self.__class__.__name__}_{id(self)}"
 
     def setup(self, graph: TerrainGraph):
         # for now we assume that Ban rules don't need any setup, but maybe they will later, so we keep the method here
@@ -118,17 +131,72 @@ class BanRule(Rule):
                            element: Element,
                            graph: TerrainGraph,
                            manager_weight: float):
-        return
+        domain = graph.global_metrics.get('terrain_domain', None)
+        assert isinstance(domain, dict), "graph.global_metrics['terrain_domain'] must be set before BanRule initialization"
+
+        if element.is_province:
+            allowed_terrains = domain['province_terrains']
+        else:
+            allowed_terrains = domain['border_terrains']
+
+        if 'constraints' not in element or not isinstance(element['constraints'], dict):
+            element['constraints'] = {}
+
+        # Keep per-rule bans as sets; membership is the only operation the solver needs.
+        element['constraints'][self.rule_key] = set()
 
     def update_affected(self,
                         affected_element: Element,
                         graph: TerrainGraph,
                         origin_element: Element):
-        raise NotImplementedError(
-            "BanRule.update_affected is intentionally deferred for the MVP. "
-            "Future implementation should evaluate a list of neighboring Elements "
-            "returned by a range-aware graph helper and apply symmetric set1<->set2 bans."
+        neighborhood = graph.get_connected_elements(
+            affected_element,
+            mode=self.range_type,
+            range=self.range,
+            range_check=self.range_check,
+            element_kind='both',
+            include_distance=self.include_distance,
         )
+
+        # Reset this rule's constraint entry and recompute from current assignments.
+        domain = graph.global_metrics.get('terrain_domain', None)
+        assert isinstance(domain, dict), "graph.global_metrics['terrain_domain'] must be set before BanRule updates"
+        if affected_element.is_province:
+            allowed_terrains = domain['province_terrains']
+        else:
+            allowed_terrains = domain['border_terrains']
+
+        allowed_terrain_set = set(allowed_terrains)
+        rule_constraints = set()
+
+        if self.include_distance:
+            set1_neighbors = [
+                neighbor_info
+                for neighbor_info in neighborhood
+                if neighbor_info[0].get('terrain', None) in self.set1
+            ]
+            set2_neighbors = [
+                neighbor_info
+                for neighbor_info in neighborhood
+                if neighbor_info[0].get('terrain', None) in self.set2
+            ]
+        else:
+            set1_neighbors = [neighbor for neighbor in neighborhood if neighbor.get('terrain', None) in self.set1]
+            set2_neighbors = [neighbor for neighbor in neighborhood if neighbor.get('terrain', None) in self.set2]
+
+        if self.evaluation(set1_neighbors):
+            for terrain in self.set2:
+                if terrain in allowed_terrain_set:
+                    rule_constraints.add(terrain)
+
+        if self.evaluation(set2_neighbors):
+            for terrain in self.set1:
+                if terrain in allowed_terrain_set:
+                    rule_constraints.add(terrain)
+
+        if 'constraints' not in affected_element or not isinstance(affected_element['constraints'], dict):
+            affected_element['constraints'] = {}
+        affected_element['constraints'][self.rule_key] = rule_constraints
 
     def update_statistics_for_origin(self,
                                      graph: TerrainGraph,

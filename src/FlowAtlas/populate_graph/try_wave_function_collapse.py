@@ -4,58 +4,15 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 from FlowAtlas.voronoi_utils import color_voronoi_faces
-from FlowAtlas.populate_graph.wave_function_collapse import WaveFunctionCollapse, make_wfc_settings_from_global_dist
+from FlowAtlas.populate_graph.wave_function_collapse import WaveFunctionCollapse
+from FlowAtlas.populate_graph.rules_library import make_default_wfc_settings
 from FlowAtlas.try_voronoi_creation import gen_grid, spread_points, voronoi_and_graph
 
-settings = {
-    # this test config includes all normal single terrain types on the surface layer
-    # but no cave terrain or special stuff we might want to add later
-    # and it assume no combied terrains
-    'base_global_target_dist': {
-        # missing for later, all cave combinations (inc cave wall),
-        # montains and freshwater (from border terrains, and maybe lake neighbour?)
-        # small/large province
-        # no_start, good_start, bad_start, good_throne_location, bad_throne_location
-        # warmer, colder
-        # rare terrain masks (one per magic path)
-        # also check for others seen in dominions_data.py:
-        # unknown, invisible, vast, infernal waste, void, has gate, flooded,
-        # attackers rout once, Cave wall effect/draw as cave, Draw as UW, and some ???
-        'province_terrains': {
-            'plains': 0.6,
-            'highlands': 0.2,
-            'swamp': 0.1,
-            'waste': 0.1,
-            'forest': 0.25,
-            'farm': 0.15,
-            'sea': 0.15,
-            'gorge': 0.02, # a combination terrain in d6m map files, but we list it separately
-            'kelp_forest': 0.05, # a combination terrain in d6m map files, but we list it separately
-            'deep_sea': 0.03, # a combination terrain in d6m map files, but we list it separately
-        },
-        'border_terrains': {
-            'normal': 0.7,
-            'mountain_pass': 0.05,
-            'river': 0.05,
-            # 'impassable': 0.0,
-            'road': 0.02,
-            'river_with_bridge': 0.02,
-            'impassable_mountain_pass': 0.05,
-        }
-    }
-}
+# TODO consider what the actual default usage of WFC should look like, how should
+# the user or other code setup/define rules and target distributions for it?
 
-# convert from proabilities to factors
-# TODO we should move this to wave_function_collapse.py
-summed = sum(settings['base_global_target_dist']['province_terrains'].values())
-temp = {terrain: prob / summed for terrain, prob in settings['base_global_target_dist']['province_terrains'].items()}
-settings['base_global_target_dist']['province_terrains'] = temp
-summed = sum(settings['base_global_target_dist']['border_terrains'].values())
-temp = {terrain: prob / summed for terrain, prob in settings['base_global_target_dist']['border_terrains'].items()}
-settings['base_global_target_dist']['border_terrains'] = temp
-
-# Parse the global dist into WFC-ready settings: extracts terrain domains and creates a DistRule/RuleManager.
-wfc_settings = make_wfc_settings_from_global_dist(settings)
+# Current default rules and distributions live in rules_library.py.
+wfc_settings = make_default_wfc_settings()
 
 # Example usage:
 # import networkx as nx
@@ -105,6 +62,10 @@ def test_wfc():
     point2color = {n: terrain_colors[graph.nodes[n]['terrain']] for n in graph.nodes}
     color_voronoi_faces(point2color)
     voronoi_plot_2d(voronoi, ax=ax, show_vertices=False, line_colors='orange', line_width=1.2, line_alpha=0.8)
+    # TODO get nx.Draw to work for TerrainGraph or make a workaround for visualising TerrainGraphs connections
+    # TODO the goal is to show all borders color/linestyle codes as well
+    # as either links between node centers, or as Voronoi edge colors
+    # (ideally both options should be supported and usable at the same time)
     #nx.draw(graph_plain, pos=pos, ax=ax, node_color='red', with_labels=False, node_size=20, edge_color='white', alpha=0.5)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)

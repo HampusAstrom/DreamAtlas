@@ -14,7 +14,9 @@ import unittest
 import networkx as nx
 from FlowAtlas.populate_graph.terrain_graph import Element, TerrainGraph
 from FlowAtlas.populate_graph.wave_function_collapse import WaveFunctionCollapse, collect_global_metrics, update_joint_probability_distribution
-from FlowAtlas.populate_graph.rule_management import DistRule, RuleManager
+from FlowAtlas.populate_graph.rule_management import BanRule, DistRule, RuleManager
+from FlowAtlas.populate_graph.wave_function_collapse import make_wfc_settings_from_global_dist
+from FlowAtlas.populate_graph.rules_library import make_default_wfc_settings
 
 
 def build_domain_from_rules(rule_managers: list[RuleManager]) -> dict:
@@ -225,6 +227,69 @@ class TestTerrainGraphElementIteration(unittest.TestCase):
         terrains = [t for _, t in items]
         self.assertIn('forest', terrains)
         self.assertIn(None, terrains)
+
+
+class TestTerrainGraphTopologyNeighborhood(unittest.TestCase):
+    """Test topology range queries for connected elements."""
+
+    def setUp(self):
+        self.graph = TerrainGraph(settings={})
+        self.graph.add_node("A")
+        self.graph.add_node("B")
+        self.graph.add_node("C")
+        self.graph.add_edge("A", "B")
+        self.graph.add_edge("A", "C")
+        self.graph.add_edge("B", "C")
+
+    def test_node_range_eq_half_returns_incident_edges(self):
+        node_a = Element.from_node("A", self.graph)
+
+        neighbors = self.graph.get_connected_elements_topology(
+            node_a,
+            range=0.5,
+            range_check='eq',
+            element_kind='edges',
+            include_distance=False,
+        )
+
+        edge_ids = {tuple(sorted(edge.element_id)) for edge in neighbors}
+        self.assertEqual(edge_ids, {("A", "B"), ("A", "C")})
+
+    def test_node_range_leq_one_returns_incident_edges_and_neighbor_nodes(self):
+        node_a = Element.from_node("A", self.graph)
+
+        neighbors = self.graph.get_connected_elements_topology(
+            node_a,
+            range=1.0,
+            range_check='leq',
+            element_kind='both',
+            include_distance=False,
+        )
+
+        node_ids = {elem.element_id for elem in neighbors if elem.is_node}
+        edge_ids = {tuple(sorted(elem.element_id)) for elem in neighbors if elem.is_border}
+        self.assertEqual(node_ids, {"B", "C"})
+        self.assertEqual(edge_ids, {("A", "B"), ("A", "C")})
+
+    def test_include_distance_returns_distance_metadata(self):
+        edge_ab = Element.from_edge(("A", "B"), self.graph)
+
+        neighbors = self.graph.get_connected_elements_topology(
+            edge_ab,
+            range=1.0,
+            range_check='leq',
+            element_kind='both',
+            include_distance=True,
+        )
+
+        payload = {
+            (elem.is_node, tuple(sorted(elem.element_id)) if elem.is_border else elem.element_id): dist
+            for elem, dist in neighbors
+        }
+        self.assertAlmostEqual(payload[(True, "A")], 0.5, places=8)
+        self.assertAlmostEqual(payload[(True, "B")], 0.5, places=8)
+        self.assertAlmostEqual(payload[(False, ("A", "C"))], 1.0, places=8)
+        self.assertAlmostEqual(payload[(False, ("B", "C"))], 1.0, places=8)
 
 
 class TestTerrainGraphGlobalMetrics(unittest.TestCase):
@@ -464,6 +529,216 @@ class TestDistRuleBehavior(unittest.TestCase):
         # Normalized => forest=0.2/0.35, water=0.15/0.35
         self.assertAlmostEqual(element['joint_prob_dist']['forest'], 0.2 / 0.35, places=8)
         self.assertAlmostEqual(element['joint_prob_dist']['water'], 0.15 / 0.35, places=8)
+
+
+class TestBanRuleBehavior(unittest.TestCase):
+    """Behavior-level tests for BanRule neighborhood evaluation and symmetric bans."""
+
+    def setUp(self):
+        self.graph = TerrainGraph(settings={})
+        self.graph.add_node("A", terrain=None)
+        self.graph.add_node("B", terrain=None)
+        self.graph.add_node("C", terrain=None)
+        self.graph.add_edge("A", "B", terrain=None)
+        self.graph.add_edge("B", "C", terrain=None)
+
+        self.graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('forest', 'sea', 'waste'),
+                'border_terrains': ('normal', 'river'),
+            }
+        }
+
+    def test_ban_rule_bans_opposite_set_for_neighboring_match(self):
+        rule = BanRule(
+            set1={'sea'},
+            set2={'forest'},
+            range=1.0,
+            range_check='leq',
+            evaluation=lambda neighbors: len(neighbors) > 0,
+            name='sea_forest_ban',
+        )
+
+        for element in self.graph.get_all_elements():
+            rule.initialize_element(element, self.graph, manager_weight=1.0)
+
+        self.graph.nodes["B"]['terrain'] = 'sea'
+        affected = Element.from_node("A", self.graph)
+        origin = Element.from_node("B", self.graph)
+
+        rule.update_affected(affected, self.graph, origin)
+
+        self.assertEqual(affected['constraints']['sea_forest_ban'], {'forest'})
+
+    def test_ban_rule_is_symmetric_set1_set2(self):
+        rule = BanRule(
+            set1={'sea'},
+            set2={'forest'},
+            range=1.0,
+            range_check='leq',
+            evaluation=lambda neighbors: len(neighbors) > 0,
+            name='sea_forest_ban',
+        )
+
+        for element in self.graph.get_all_elements():
+            rule.initialize_element(element, self.graph, manager_weight=1.0)
+
+        affected = Element.from_node("A", self.graph)
+
+        self.graph.nodes["B"]['terrain'] = 'sea'
+        rule.update_affected(affected, self.graph, Element.from_node("B", self.graph))
+        self.assertEqual(affected['constraints']['sea_forest_ban'], {'forest'})
+
+        self.graph.nodes["B"]['terrain'] = 'forest'
+        origin = Element.from_node("B", self.graph)
+        rule.update_affected(affected, self.graph, origin)
+        self.assertEqual(affected['constraints']['sea_forest_ban'], {'sea'})
+
+    def test_ban_rule_does_not_apply_outside_range(self):
+        rule = BanRule(
+            set1={'sea'},
+            set2={'forest'},
+            range=1.0,
+            range_check='leq',
+            evaluation=lambda neighbors: len(neighbors) > 0,
+            name='sea_forest_ban',
+        )
+
+        for element in self.graph.get_all_elements():
+            rule.initialize_element(element, self.graph, manager_weight=1.0)
+
+        self.graph.nodes["C"]['terrain'] = 'sea'
+        affected = Element.from_node("A", self.graph)
+        origin = Element.from_node("C", self.graph)
+
+        rule.update_affected(affected, self.graph, origin)
+
+        self.assertEqual(affected['constraints']['sea_forest_ban'], set())
+
+    def test_ban_rule_distance_aware_evaluation_payload(self):
+        rule = BanRule(
+            set1={'river'},
+            set2={'forest'},
+            range=0.5,
+            range_check='eq',
+            include_distance=True,
+            evaluation=lambda neighbors: any(distance <= 0.5 for _, distance in neighbors),
+            name='river_forest_ban',
+        )
+
+        for element in self.graph.get_all_elements():
+            rule.initialize_element(element, self.graph, manager_weight=1.0)
+
+        self.graph.edges["A", "B"]['terrain'] = 'river'
+        affected = Element.from_node("A", self.graph)
+        origin = Element.from_edge(("A", "B"), self.graph)
+
+        rule.update_affected(affected, self.graph, origin)
+
+        self.assertEqual(affected['constraints']['river_forest_ban'], {'forest'})
+
+
+class TestWaveFunctionCollapseIntegration(unittest.TestCase):
+    """Integration tests for full WFC loop with rules and constraints."""
+
+    def test_banrule_respected_in_full_collapse(self):
+        """
+        Integration test: BanRule constraints are respected throughout full WFC collapse.
+
+        Setup: Small 4-node graph with sea/forest BanRule.
+        Expected: No forest province ever has a 'river' border (banned) adjacent,
+        regardless of which node was set first or the entropy-driven solver order.
+        """
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C", "D"])
+        graph.add_edges_from([("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")])
+
+        # Setup: BanRule forbids 'river' borders next to 'sea' provinces.
+        ban_rule = BanRule(
+            set1={'sea'},
+            set2={'river'},
+            range=1.0,
+            range_check='leq',
+            evaluation=lambda neighbors: len(neighbors) > 0,
+            name='sea_river_ban',
+        )
+        ban_manager = RuleManager(name='sea_river', rules=[ban_rule])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'sea': 0.5, 'forest': 0.5},
+                'border_terrains': {'river': 0.5, 'normal': 0.5},
+            },
+            'rule_managers': [ban_manager],
+        }
+
+        # Process settings through the standard WFC setup function
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+
+        # Pre-seed one sea province so BanRule constraints propagate to unset borders
+        # before border terrains are selected by the collapse loop.
+        graph.nodes["A"]['terrain'] = 'sea'
+
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        result = wfc.wave_function_collapse()
+
+        # Verify: No 'sea' province has 'river' border adjacent
+        for edge_id in result.edges():
+            u, v = edge_id
+            u_terrain = result.nodes[u]['terrain']
+            v_terrain = result.nodes[v]['terrain']
+            edge_terrain = result.edges[edge_id]['terrain']
+
+            if u_terrain == 'sea' or v_terrain == 'sea':
+                self.assertNotEqual(
+                    edge_terrain, 'river',
+                    f"Sea province adjacent to river border: {edge_id} "
+                    f"({u}={u_terrain}, {v}={v_terrain}, border={edge_terrain})"
+                )
+
+    def test_wfc_all_elements_set_on_completion(self):
+        """
+        Integration test: WFC.wave_function_collapse() terminates with all elements set.
+        """
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        result = wfc.wave_function_collapse()
+
+        # Verify all nodes and edges have terrain set
+        for node in result.nodes():
+            self.assertIsNotNone(result.nodes[node]['terrain'], f"Node {node} terrain not set")
+
+        for edge in result.edges():
+            self.assertIsNotNone(result.edges[edge]['terrain'], f"Edge {edge} terrain not set")
+
+        # Verify is_all_set returns True
+        self.assertTrue(result.is_all_set(), "Graph should report all elements set after collapse")
+
+
+class TestRulesLibrary(unittest.TestCase):
+    """Test default WFC rule bundle wiring."""
+
+    def test_default_wfc_settings_include_global_and_sea_border_rules(self):
+        settings = make_default_wfc_settings()
+
+        manager_names = [manager.name for manager in settings['rule_managers']]
+        self.assertIn('global_dist', manager_names)
+        self.assertIn('sea_borders', manager_names)
+
+        self.assertIn('base_terrain_domain', settings)
+        self.assertIn('province_terrains', settings['base_terrain_domain'])
+        self.assertIn('border_terrains', settings['base_terrain_domain'])
 
 
 if __name__ == '__main__':

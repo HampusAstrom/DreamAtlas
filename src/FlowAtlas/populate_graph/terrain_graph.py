@@ -12,8 +12,9 @@ Design principles:
 - Both stay lean; complex logic belongs in WaveFunctionCollapse
 """
 
+import math
 from collections.abc import Iterator
-from typing import Any, Callable, Generator
+from typing import Any, Callable, Generator, Literal
 
 import networkx as nx
 
@@ -117,9 +118,12 @@ class TerrainGraph(nx.Graph):
         self.settings = settings
         self.global_metrics = {}
 
-    def __iter__(self) -> Iterator[Element]:
-        """Iterate over all elements (nodes first, then edges)."""
-        yield from self.get_all_elements()
+    # Note: We intentionally do not implement __iter__ to yield Elements,
+    # as that would break compatibility with nx.Graph.
+    # Instead, we provide explicit methods like get_all_elements() and iter_elements() for Element
+    # def __iter__(self) -> Iterator[Element]:
+    #     """Iterate over all elements (nodes first, then edges)."""
+    #     yield from self.get_all_elements()
 
     def __contains__(self, n: object) -> bool:
         """Check if an element (node or edge) is in the graph."""
@@ -213,8 +217,11 @@ class TerrainGraph(nx.Graph):
         self,
         element: Element,
         mode: str = 'topology',
-        topology_edge_scope: str = 'distance_leq_1',
-    ) -> dict[str, Any]:
+        range: float = 1.0,
+        range_check: Literal['eq', 'leq'] = 'leq',
+        element_kind: Literal['nodes', 'edges', 'both'] = 'both',
+        include_distance: bool = False,
+    ) -> list[Any]:
         """
         Return connected elements for a node or edge element.
 
@@ -223,13 +230,22 @@ class TerrainGraph(nx.Graph):
             mode:
                 - 'topology': graph-native adjacency only (implemented)
                 - 'geography': Voronoi/triangle-augmented adjacency (not implemented yet)
-            topology_edge_scope:
-                Applies only when mode='topology' and element is an edge:
-                - 'incidence_only': return only the two incident nodes (distance 0.5)
-                - 'distance_leq_1': return incident nodes plus adjacent edges (distance <= 1.0)
+            range:
+                Topological range measured on the element-incidence graph.
+                Each node<->incident-edge hop has length 0.5.
+            range_check:
+                - 'leq': include elements with distance <= range
+                - 'eq': include elements with distance approximately equal to range
+            element_kind:
+                - 'nodes': include province elements only
+                - 'edges': include border elements only
+                - 'both': include both
+            include_distance:
+                If True, return (Element, distance) pairs.
+                If False, return Element objects.
 
         Returns:
-            dict[str, Any]: Neighborhood payload.
+            list[Any]: Neighbor elements (or (element, distance) pairs).
 
         Notes:
             Use mode='topology' for MVP behavior.
@@ -240,7 +256,13 @@ class TerrainGraph(nx.Graph):
             Elements should optionally include an explicit range/distance value.
         """
         if mode == 'topology':
-            return self.get_connected_elements_topology(element, edge_scope=topology_edge_scope)
+            return self.get_connected_elements_topology(
+                element,
+                range=range,
+                range_check=range_check,
+                element_kind=element_kind,
+                include_distance=include_distance,
+            )
 
         if mode == 'geography':
             raise NotImplementedError(
@@ -250,83 +272,82 @@ class TerrainGraph(nx.Graph):
 
         raise ValueError(f"Unknown mode '{mode}'. Expected 'topology' or 'geography'.")
 
-    def get_connected_elements_topology(self, element: Element, edge_scope: str = 'distance_leq_1') -> dict[str, Any]:
+    def _iter_incidence_neighbors(self, element: Element) -> Generator[tuple[Element, float], None, None]:
+        """Yield immediate incidence neighbors and edge weight (always 0.5)."""
+        if element.is_node:
+            node_id = element.element_id
+            for nbr in self.neighbors(node_id):
+                yield Element.from_edge((node_id, nbr), self), 0.5
+            return
+
+        u, v = element.element_id
+        yield Element.from_node(u, self), 0.5
+        yield Element.from_node(v, self), 0.5
+
+    def get_connected_elements_topology(
+        self,
+        element: Element,
+        range: float = 1.0,
+        range_check: Literal['eq', 'leq'] = 'leq',
+        element_kind: Literal['nodes', 'edges', 'both'] = 'both',
+        include_distance: bool = False,
+    ) -> list[Any]:
         """
         Return topology-connected elements for a node or edge element.
 
-        TODO:
-            This API currently returns Elements grouped under 'nodes' and 'edges',
-            which is useful but also mixes wrapper-level and graph-primitive concepts.
-            Revisit whether this method should:
-            - return per-element distance/range metadata,
-            - accept filtering arguments (distance threshold, nodes only, edges only),
-            - or delegate more of that filtering to iter_elements/filter_elements.
-            The intended division of responsibility among these APIs should be
-            clarified before BanRule range semantics are implemented.
-
-        Node element:
-            - nodes: neighboring node Elements
-            - edges: incident edge Elements
-
-        Edge element:
-            - edge_scope='incidence_only':
-                - nodes: the two incident node Elements
-                - edges: []
-                - edges_by_node: {}
-            - edge_scope='distance_leq_1':
-                - nodes: the two incident node Elements
-                - edges: neighboring edge Elements that share either endpoint
-                - edges_by_node: neighboring edge Elements split by shared endpoint
+        Contract:
+            - Topology neighborhoods are computed on the incidence graph where
+              node<->edge adjacency has distance 0.5.
+            - This method owns topology-aware distance semantics and optional
+              node/edge filtering.
+            - iter_elements/filter_elements remain graph-wide generic iterators
+              and do not encode topological range semantics.
         """
-        if element.is_node:
-            node_id = element.element_id
-            neighbor_nodes = [Element.from_node(nbr, self) for nbr in self.neighbors(node_id)]
-            incident_edges = [Element.from_edge((node_id, nbr), self) for nbr in self.neighbors(node_id)]
-            return {
-                'nodes': neighbor_nodes,
-                'edges': incident_edges,
-            }
+        if range < 0:
+            raise ValueError(f"range must be >= 0, got {range}")
+        if range_check not in {'eq', 'leq'}:
+            raise ValueError(f"Unknown range_check '{range_check}'. Expected 'eq' or 'leq'.")
+        if element_kind not in {'nodes', 'edges', 'both'}:
+            raise ValueError(f"Unknown element_kind '{element_kind}'. Expected 'nodes', 'edges', or 'both'.")
 
-        u, v = element.element_id
-        node_elements = [Element.from_node(u, self), Element.from_node(v, self)]
+        tolerance = 1e-9
+        frontier = [(0.0, element)]
+        visited: dict[tuple[bool, Any], float] = {(element.is_node, element.element_id): 0.0}
 
-        if edge_scope == 'incidence_only':
-            return {
-                'nodes': node_elements,
-                'edges': [],
-                'edges_by_node': {},
-            }
+        while frontier:
+            current_dist, current = frontier.pop(0)
 
-        if edge_scope != 'distance_leq_1':
-            raise ValueError(
-                f"Unknown edge_scope '{edge_scope}'. Expected 'incidence_only' or 'distance_leq_1'."
-            )
+            for neighbor, step_cost in self._iter_incidence_neighbors(current):
+                new_dist = current_dist + step_cost
+                if new_dist > range + tolerance:
+                    continue
 
-        edges_by_u = []
-        for nbr in self.neighbors(u):
-            edge_id = (u, nbr)
-            if edge_id != element.element_id and edge_id[::-1] != element.element_id:
-                edges_by_u.append(Element.from_edge(edge_id, self))
+                key = (neighbor.is_node, neighbor.element_id)
+                old_dist = visited.get(key, math.inf)
+                if new_dist + tolerance < old_dist:
+                    visited[key] = new_dist
+                    frontier.append((new_dist, neighbor))
 
-        edges_by_v = []
-        for nbr in self.neighbors(v):
-            edge_id = (v, nbr)
-            if edge_id != element.element_id and edge_id[::-1] != element.element_id:
-                edges_by_v.append(Element.from_edge(edge_id, self))
+        # Remove origin and build filtered result payload.
+        origin_key = (element.is_node, element.element_id)
+        visited.pop(origin_key, None)
 
-        unique_edges = {}
-        for edge_elem in edges_by_u + edges_by_v:
-            key = tuple(sorted(edge_elem.element_id))
-            unique_edges[key] = edge_elem
+        items: list[tuple[Element, float]] = []
+        for (is_node, element_id), dist in visited.items():
+            if range_check == 'eq' and not math.isclose(dist, range, rel_tol=0.0, abs_tol=tolerance):
+                continue
+            if element_kind == 'nodes' and not is_node:
+                continue
+            if element_kind == 'edges' and is_node:
+                continue
 
-        return {
-            'nodes': node_elements,
-            'edges': list(unique_edges.values()),
-            'edges_by_node': {
-                u: edges_by_u,
-                v: edges_by_v,
-            },
-        }
+            neighbor = Element.from_node(element_id, self) if is_node else Element.from_edge(element_id, self)
+            items.append((neighbor, dist))
+
+        items.sort(key=lambda pair: pair[1])
+        if include_distance:
+            return items
+        return [elem for elem, _ in items]
 
     def filter_elements(self, predicate: Callable[[Element], bool], is_node=None):
         """Yield elements where predicate(element) is True."""
