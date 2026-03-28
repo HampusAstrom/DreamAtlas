@@ -1,9 +1,13 @@
 import numpy as np
 import networkx as nx
+from time import perf_counter
 from scipy.spatial import Voronoi, Delaunay
 
 from .terrain_graph import Element, TerrainGraph
 from .rule_management import RuleManager, DistRule
+from ..debug_utils import (
+    DebugStatisticsCollector, DebugReportFormatter
+)
 
 """
 ⚠️  WARNING: Wave Function Collapse Implementation INCOMPLETE ⚠️
@@ -209,6 +213,7 @@ def shannon_entropy(prob_dist: dict):
                 entropy -= prob * np.log(prob)
     return entropy
 
+
 def select_element_to_set(graph: TerrainGraph) -> Element:
     # select the next element (province or border) to set based on entropy and other factors
 
@@ -253,6 +258,7 @@ class WaveFunctionCollapse:
     """
     def __init__(self, settings: dict, graph: nx.Graph):
         self.settings = settings
+
         if isinstance(graph, TerrainGraph):
             print("Using provided TerrainGraph directly (in-place modification)")
         elif isinstance(graph, nx.Graph):
@@ -282,6 +288,10 @@ class WaveFunctionCollapse:
             # TODO replace check with checking that it is an instance of the new class, when implemented
             if not isinstance(rule_manager, RuleManager):
                 raise ValueError(f"Class {rule_manager} in rule_managers is not an instance of RuleManager")
+
+        # Initialize debug configuration (needs graph and rule_managers to be set)
+        self._setup_debug_configuration()
+
         # 2. collect global metrics for graph
         collected_metrics = self.collect_global_metrics(self.graph, self.settings)
         assert isinstance(collected_metrics, dict), "collect_global_metrics should return a dict of global metrics"
@@ -309,6 +319,9 @@ class WaveFunctionCollapse:
 
         # 9. ensure unset elements have fresh joint distributions
         self.refresh_joint_probabilities()
+
+        if self.debug_enabled:
+            self.debug_stats['initial_state'] = self.debug_collector.get_progress_state()
 
         # 10. wave function collapse procedure can now be started by
         # calling wave_function_collapse()
@@ -396,19 +409,157 @@ class WaveFunctionCollapse:
             update_joint_probability_distribution(element, self.graph)
 
 
-    def step_wave_function_collapse(self):
+    def step_wave_function_collapse(self, capture_debug_step: bool = False):
         # perform a single step of the wave function collapse process
         element_to_set = select_element_to_set(self.graph)
         terrain = select_element_terrain(element_to_set, self.graph)
+        if not capture_debug_step:
+            self.set_element_terrain(element_to_set, terrain)
+            return None
+
+        selected_probability = element_to_set['joint_prob_dist'][terrain]
+        element_kind = 'province' if element_to_set.is_province else 'border'
+        flags_raw = element_to_set.get('flags', {})
+        element_flags = dict(flags_raw) if isinstance(flags_raw, dict) else {}
         self.set_element_terrain(element_to_set, terrain)
+        return {
+            'element_kind': element_kind,
+            'selected_terrain': terrain,
+            'selected_probability': selected_probability,
+            'element_flags': element_flags,
+        }
 
     # the main control flow function for the wave function collapse process
     # taking in a graph and any settings and returning a graph with terrains set
     def wave_function_collapse(self) -> TerrainGraph:
+        if not self.debug_enabled:
+            while not self.graph.is_all_set():
+                self.step_wave_function_collapse(capture_debug_step=False)
+            return self.graph
+
+        total_start = perf_counter() if self.debug_wfc_timing else None
+
         while not self.graph.is_all_set():
-            self.step_wave_function_collapse()
+            step_start = perf_counter() if self.debug_wfc_timing else None
+            step_info = self.step_wave_function_collapse(capture_debug_step=True)
+            step_seconds = (perf_counter() - step_start) if step_start is not None else None
+            assert isinstance(step_info, dict)
+            self._record_debug_step(step_info, step_seconds)
+
+        total_seconds = (perf_counter() - total_start) if total_start is not None else 0.0
+
+        if self.debug_enabled:
+            # Finalize statistics in collector
+            self.debug_collector.finalize(total_seconds)
+
+            self._flush_progress_window(force=True)
+
+            if self.debug_print_progress:
+                line = (
+                    "[WFC Debug] complete "
+                    f"steps={self.debug_stats['steps']} "
+                    f"completion={1.0:.2%}"
+                )
+                if self.debug_wfc_timing:
+                    line += f" total_seconds={total_seconds:.3f}"
+                print(line)
+
+            if self.debug_print_progress_report:
+                print(self.format_debug_progress_report())
+            if self.debug_print_final_report:
+                print(self.format_debug_final_report())
 
         return self.graph
+
+    # ===== DEBUG STATISTICS & REPORTING (Optional instrumentation) =====
+    # Keep the main WFC control flow above and the debug plumbing here.
+
+    def _setup_debug_configuration(self):
+        """Apply debug level presets and initialize debug flags and collector."""
+        debug_level = int(self.settings.get('debug_wfc_level', 0))
+        level_defaults = {
+            0: {
+                'debug_wfc_statistics': False,
+                'debug_wfc_print_progress': False,
+                'debug_wfc_print_progress_report': False,
+                'debug_wfc_print_final_report': False,
+                'debug_wfc_timing': False,
+            },
+            1: {
+                'debug_wfc_statistics': True,
+                'debug_wfc_print_progress': True,
+                'debug_wfc_print_progress_report': False,
+                'debug_wfc_print_final_report': False,
+                'debug_wfc_timing': False,
+            },
+            2: {
+                'debug_wfc_statistics': True,
+                'debug_wfc_print_progress': True,
+                'debug_wfc_print_progress_report': True,
+                'debug_wfc_print_final_report': True,
+                'debug_wfc_timing': True,
+            },
+        }
+
+        defaults = level_defaults.get(debug_level, level_defaults[0])
+        for key, default_val in defaults.items():
+            if key not in self.settings:
+                self.settings[key] = default_val
+
+        self.debug_enabled = bool(self.settings.get('debug_wfc_statistics', False))
+        self.debug_print_progress = bool(self.settings.get('debug_wfc_print_progress', False))
+        self.debug_print_every = max(1, int(self.settings.get('debug_wfc_print_every', 25)))
+        self.debug_store_step_snapshots = bool(self.settings.get('debug_wfc_store_step_snapshots', True))
+        self.debug_print_progress_report = bool(self.settings.get('debug_wfc_print_progress_report', False))
+        self.debug_print_final_report = bool(self.settings.get('debug_wfc_print_final_report', False))
+        self.debug_wfc_timing = bool(self.settings.get('debug_wfc_timing', False))
+        self.debug_wfc_print_distribution_metrics = bool(self.settings.get('debug_wfc_print_distribution_metrics', True))
+
+        self.debug_collector = DebugStatisticsCollector(
+            self.graph,
+            self.rule_managers,
+            store_step_snapshots=self.debug_store_step_snapshots,
+        )
+        self.debug_stats = self.debug_collector.stats
+        self.debug_stats['enabled'] = self.debug_enabled
+
+    def _flush_progress_window(self, force: bool = False):
+        summary = self.debug_collector.flush_window(force=force)
+        if summary and self.debug_print_progress:
+            print(DebugReportFormatter.format_progress_window_summary(
+                summary,
+                include_timing=self.debug_wfc_timing,
+                include_distribution_metrics=self.debug_wfc_print_distribution_metrics,
+            ))
+            print()
+
+    def _record_debug_step(self, step_info: dict, step_seconds: float | None):
+        if not self.debug_enabled:
+            return
+
+        self.debug_collector.record_step(step_info, step_seconds)
+
+        if self.debug_print_progress and self.debug_stats['steps'] % self.debug_print_every == 0:
+            self._flush_progress_window(force=False)
+
+    def get_debug_statistics(self) -> dict:
+        return self.debug_stats
+
+    def format_debug_progress_report(self) -> str:
+        if not self.debug_enabled:
+            return "WFC debug statistics are disabled (set debug_wfc_statistics=True)."
+
+        return DebugReportFormatter.format_progress_report(self.debug_stats)
+
+    def format_debug_final_report(self) -> str:
+        if not self.debug_enabled:
+            return "WFC debug statistics are disabled (set debug_wfc_statistics=True)."
+
+        return DebugReportFormatter.format_final_report(
+            self.debug_stats,
+            include_distribution_metrics=self.debug_wfc_print_distribution_metrics,
+        )
+
 
 
 def convert_dist_to_relative_factors(dist: dict) -> dict:

@@ -776,6 +776,183 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         # Verify is_all_set returns True
         self.assertTrue(result.is_all_set(), "Graph should report all elements set after collapse")
 
+    def test_wfc_debug_statistics_tracks_progress_timing_and_final_distribution(self):
+        """Debug mode should expose per-step progress/timing and post-run distribution metrics."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+
+        self.assertTrue(debug_stats['enabled'])
+        self.assertEqual(debug_stats['steps'], 5)
+        self.assertEqual(len(debug_stats['progress']), 5)
+        self.assertGreaterEqual(debug_stats['timing']['total_seconds'], 0.0)
+        self.assertGreaterEqual(debug_stats['timing']['province_assignment_seconds'], 0.0)
+        self.assertGreaterEqual(debug_stats['timing']['border_assignment_seconds'], 0.0)
+        self.assertGreaterEqual(debug_stats['timing']['mean_step_seconds'], 0.0)
+
+        final_report = debug_stats['final_report']
+        self.assertIn('observed', final_report)
+        self.assertIn('rule_targets', final_report)
+        self.assertGreaterEqual(len(final_report['rule_targets']), 1)
+
+        first_rule_report = final_report['rule_targets'][0]
+        self.assertIn('province_metrics', first_rule_report)
+        self.assertIn('border_metrics', first_rule_report)
+        self.assertIn('l1_distance', first_rule_report['province_metrics'])
+        self.assertIn('l1_distance', first_rule_report['border_metrics'])
+        self.assertIn('per_terrain', first_rule_report['province_metrics'])
+        self.assertIn('per_terrain', first_rule_report['border_metrics'])
+        self.assertIn('equal_weight_match', first_rule_report['province_metrics'])
+        self.assertIn('target_weighted_match', first_rule_report['province_metrics'])
+        self.assertIn('tv_distance', first_rule_report['province_metrics'])
+
+        self.assertIn('progress_windows', debug_stats)
+        self.assertGreaterEqual(len(debug_stats['progress_windows']), 1)
+
+    def test_wfc_debug_report_formatters_return_text(self):
+        """Debug formatter methods should provide printable progress/final report text."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        progress_text = wfc.format_debug_progress_report()
+        final_text = wfc.format_debug_final_report()
+
+        self.assertIn('WFC Progress Report', progress_text)
+        self.assertIn('snapshots=', progress_text)
+        self.assertIn('WFC Final Distribution Report', final_text)
+        self.assertIn('rule=', final_text)
+
+    def test_wfc_debug_disabled_skips_debug_bookkeeping(self):
+        """When debug is off, collapse should not collect step snapshots or final reports."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+        self.assertFalse(debug_stats['enabled'])
+        self.assertEqual(debug_stats['steps'], 0)
+        self.assertEqual(debug_stats['progress'], [])
+        self.assertEqual(debug_stats['final_report'], {})
+
+    def test_wfc_debug_level_presets_apply_defaults(self):
+        """Verify debug_wfc_level presets apply correct flag defaults."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        base_settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+        }
+
+        # Test 0 (off) preset: all flags False
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 0
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        self.assertFalse(wfc.debug_enabled)
+        self.assertFalse(wfc.debug_print_progress)
+        self.assertFalse(wfc.debug_print_progress_report)
+        self.assertFalse(wfc.debug_print_final_report)
+        self.assertFalse(wfc.debug_wfc_timing)
+
+        # Test 1 (basic) preset: statistics and progress on, reports and timing off
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 1
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        self.assertTrue(wfc.debug_enabled)
+        self.assertTrue(wfc.debug_print_progress)
+        self.assertFalse(wfc.debug_print_progress_report)
+        self.assertFalse(wfc.debug_print_final_report)
+        self.assertFalse(wfc.debug_wfc_timing)
+
+        # Test 2 (verbose) preset: all flags True
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 2
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        self.assertTrue(wfc.debug_enabled)
+        self.assertTrue(wfc.debug_print_progress)
+        self.assertTrue(wfc.debug_print_progress_report)
+        self.assertTrue(wfc.debug_print_final_report)
+        self.assertTrue(wfc.debug_wfc_timing)
+
+    def test_wfc_debug_level_explicit_flags_override_presets(self):
+        """Verify explicit flags override preset defaults."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B"])
+        graph.add_edge("A", "B")
+
+        base_settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 1.0},
+                'border_terrains': {'normal': 1.0},
+            },
+        }
+
+        # Set preset to 0 (off) but override one flag to True
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 0
+        wfc_settings['debug_wfc_timing'] = True  # Explicit override
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+
+        self.assertFalse(wfc.debug_enabled)  # Still off (from preset)
+        self.assertFalse(wfc.debug_print_progress)  # Still off (from preset)
+        self.assertTrue(wfc.debug_wfc_timing)  # Overridden to True
+
+        # Set preset to 2 (verbose) but override one flag to False
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 2
+        wfc_settings['debug_wfc_timing'] = False  # Explicit override
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+
+        self.assertTrue(wfc.debug_enabled)  # Still on (from preset)
+        self.assertTrue(wfc.debug_print_progress)  # Still on (from preset)
+        self.assertFalse(wfc.debug_wfc_timing)  # Overridden to False
+
 
 class TestRulesLibrary(unittest.TestCase):
     """Test default WFC rule bundle wiring."""
