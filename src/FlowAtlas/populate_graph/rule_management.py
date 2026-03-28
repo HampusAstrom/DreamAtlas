@@ -259,6 +259,7 @@ class DistRule(Rule):
 
                 # gather starting metrics
                 is_node = element.is_node
+                # TODO when non-1.0 flags the total should be the sum of total flag weights
                 if is_node:
                     self.total_rule_provinces += 1.0
                 else:
@@ -289,6 +290,12 @@ class DistRule(Rule):
 
         element_flag_weight = element['flags'][self.flag]
         if element_flag_weight != 1.0:
+            # TODO note on how to fix this later
+            # if we change it so that in WFC a method is called for each rule manager
+            # when creating the joint probability, we can make that just return a
+            # pointer to the dist in the normal case, but re-calculate based on flag
+            # weights when not. This just requires that dist is kept for each flag
+            # as it is before using flag weights and adjustment weight
             raise NotImplementedError(
                 f"DistRule '{self.rule_key}' currently requires flag weight 1.0 for all elements, got {element_flag_weight}"
             )
@@ -311,25 +318,23 @@ class DistRule(Rule):
             return
 
         adjusting_dist = {}
-        for terrain, target_factor in target_dist.items():
+        for terrain, target_component in target_dist.items():
             current_count = assigned_counts.get(terrain, 0)
-            target_count = target_factor * total_elements
+            target_count = target_component * total_elements
             gap = target_count - current_count
             adjustment_part = self.adjusting_factor * (gap / total_elements)
-            target_part = (1.0 - self.adjusting_factor) * target_factor
+            target_part = (1.0 - self.adjusting_factor) * target_component
             adjusted_factor = max(0.0, adjustment_part + target_part)
             adjusting_dist[terrain] = adjusted_factor
 
-        total_adjusted = sum(adjusting_dist.values())
-        if total_adjusted > 0:
-            normalized = {terrain: weight / total_adjusted for terrain, weight in adjusting_dist.items()}
-        else:
-            n = len(adjusting_dist)
-            normalized = {terrain: 1.0 / n for terrain in adjusting_dist}
+        # OBS There should be no normalizing here! The adjusting dist is meant to
+        # be a set of factors that are applied to the base global target dist,
+        # so it should not be normalized on its own, only norm joint prob in WFC
+        # and optionally norm dists that are not on the "1.0 is default" format in setup
 
         # Mutate in place so all elements holding this dict reference are updated immediately.
         live_dist.clear()
-        live_dist.update(normalized)
+        live_dist.update(adjusting_dist)
 
     def update_affected(self,
                         affected_element: Element,

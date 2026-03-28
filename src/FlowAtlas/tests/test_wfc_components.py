@@ -484,10 +484,12 @@ class TestDistRuleBehavior(unittest.TestCase):
         origin['terrain'] = 'forest'
         rule.update_statistics_for_origin(self.graph, origin)
 
-        # For two provinces with target 0.5/0.5 and one forest already assigned:
-        # forest gap -> 0, water gap -> +1 -> normalized to forest:0.0, water:1.0
+        # For two provinces with target 0.5/0.5 and one forest already assigned
+        # (adjusting_factor=1.0, NO normalization per updated design):
+        # forest: gap=0,  adjustment_part=0,   target_part=0 -> 0.0
+        # water:  gap=+1, adjustment_part=+0.5, target_part=0 -> 0.5
         self.assertAlmostEqual(rule.adjusting_province_dist['forest'], 0.0, places=8)
-        self.assertAlmostEqual(rule.adjusting_province_dist['water'], 1.0, places=8)
+        self.assertAlmostEqual(rule.adjusting_province_dist['water'], 0.5, places=8)
 
     def test_dist_rule_setup_raises_for_non_unit_all_flag_weight(self):
         """MVP should fail fast when existing 'all' flag weight is not 1.0."""
@@ -503,6 +505,28 @@ class TestDistRuleBehavior(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             rule.setup(self.graph)
+
+    def test_dist_rule_adjusting_dist_stays_unnormalized_after_update(self):
+        """Adjusted factors should remain raw factors (not internally normalized)."""
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=0.5,
+            flag='all',
+            name='global_rule',
+        )
+
+        rule.setup(self.graph)
+
+        origin = Element.from_node("A", self.graph)
+        origin['terrain'] = 'forest'
+        rule.update_statistics_for_origin(self.graph, origin)
+
+        # For two provinces and one assigned forest:
+        # forest -> 0.25, water -> 0.50 (sum=0.75, intentionally not normalized)
+        self.assertAlmostEqual(rule.adjusting_province_dist['forest'], 0.25, places=8)
+        self.assertAlmostEqual(rule.adjusting_province_dist['water'], 0.5, places=8)
+        self.assertAlmostEqual(sum(rule.adjusting_province_dist.values()), 0.75, places=8)
 
     def test_joint_probability_uses_multiplicative_factors(self):
         """Joint probabilities should be proportional to product of per-rule factors."""
@@ -529,6 +553,33 @@ class TestDistRuleBehavior(unittest.TestCase):
         # Normalized => forest=0.2/0.35, water=0.15/0.35
         self.assertAlmostEqual(element['joint_prob_dist']['forest'], 0.2 / 0.35, places=8)
         self.assertAlmostEqual(element['joint_prob_dist']['water'], 0.15 / 0.35, places=8)
+
+    def test_joint_probability_applies_dist_weights_as_linear_influence(self):
+        """Dist weights should linearly damp/boost each rule contribution before multiplication."""
+        graph = TerrainGraph(settings={})
+        graph.add_node("A", terrain=None)
+        graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('forest', 'water'),
+                'border_terrains': ('normal',),
+            }
+        }
+
+        element = Element.from_node("A", graph)
+        element['dists'] = {
+            'r1': {'forest': 0.2, 'water': 0.8},
+            'r2': {'forest': 0.9, 'water': 0.1},
+        }
+        element['dist_weights'] = {'r1': 0.0, 'r2': 0.5}
+        element['constraints'] = {}
+
+        update_joint_probability_distribution(element, graph)
+
+        # r1 weight 0.0 -> neutral (factor 1.0 for both).
+        # r2 weight 0.5 -> forest factor=0.95, water factor=0.55.
+        # Normalized: forest=0.95/(0.95+0.55), water=0.55/(0.95+0.55).
+        self.assertAlmostEqual(element['joint_prob_dist']['forest'], 0.95 / 1.5, places=8)
+        self.assertAlmostEqual(element['joint_prob_dist']['water'], 0.55 / 1.5, places=8)
 
 
 class TestBanRuleBehavior(unittest.TestCase):

@@ -167,10 +167,11 @@ def update_joint_probability_distribution(element: Element, graph: TerrainGraph)
         assert name in weights, f"Dist {name} for element {element} does not have a corresponding weight in dist_weights"
 
         # dist is already the blended result from update_affected (or from initialize_element)
-        # Treat it as a relative-factor contribution: normalize it and multiply into joint_factors
         for terrain, factor in dist.items():
             assert terrain in joint_factors, f"Terrain {terrain} from local dist {name} not found in terrain domain"
-            joint_factors[terrain] *= factor
+            # add factor, but emphasized by dist_weight (higher weight means more influence on final distribution)
+            # joint_factors[terrain] *= factor ** weights[name]  # using exponentiation to apply weight as influence level
+            joint_factors[terrain] *= factor * weights[name] + (1.0 - weights[name])  # using linear blend to apply weight as influence level
 
     # apply constraints (zero out banned terrains)
     for name, constraint in element['constraints'].items():
@@ -183,6 +184,7 @@ def update_joint_probability_distribution(element: Element, graph: TerrainGraph)
     if sum_factors > 0:
         joint_prob_dist = {terrain: f / sum_factors for terrain, f in joint_factors.items()}
     else:
+        # TODO consider if this should raise an error instead
         print(f"warning: joint probability distribution for element {element} has sum of zero or less, using uniform distribution")
         num_terrains = len(joint_factors)
         joint_prob_dist = {terrain: 1.0 / num_terrains for terrain in joint_factors}
