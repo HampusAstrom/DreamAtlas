@@ -275,13 +275,6 @@ class WaveFunctionCollapse:
         preset_assignments = self._snapshot_preset_terrains()
         self._scrub_all_terrains()
 
-        # TODO in some cases we might want multiple modules as one function,
-        # we should then check for a list of a yet to be named class instances in settings
-        # these need to have:
-        # - some way to determine at what range elements are affected by it
-        # - a method that takes in the affected element, the graph, and the origin element and:
-        #    - updates it's dist contribution (if it has any)§
-        #    - updates it's constraints contribution (if it has any)
         self.rule_managers = self.settings.get('rule_managers', []) # type: list[RuleManager]
         # For each
         for rule_manager in self.rule_managers:

@@ -165,6 +165,18 @@ src/
 - `environment.yml` - Conda environment specification
 - `conftest.py` - Pytest configuration
 
+### Development Roadmap
+
+**Planning and tracking next development phases?** See [NEXT_STEPS.md](./NEXT_STEPS.md)
+
+The roadmap document contains:
+- Organized phases for future development (WFC improvements, national integration, multi-layer support, travel rules)
+- Clear dependency tracking and blocking relationships
+- Recommended development paths for the team
+- Checkboxes for tracking progress as work is completed
+
+**For collaborators**: This file is version-controlled in git, so you always see the latest plan.
+
 ## License
 
 [Include license information]
