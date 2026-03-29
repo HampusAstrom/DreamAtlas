@@ -6,25 +6,22 @@ class FlowGraph(nx.Graph):
     def __init__(self):
         super().__init__()
 
-    def add_node(self, node_for_adding: 'MapNode', **attr):
+    def add_node(self, node_for_adding: 'ProvinceNode', **attr):
         super().add_node(node_for_adding, **attr)
-        self.update_edges(node_for_adding)
 
-    def update_edges(self, node: 'MapNode'):
-        # TODO: implement this function
-        super().add_edge(node, list(super().nodes)[0]) # Temporary, just connect to the first node for testing
+    def get_voronoi(self):
+        # Placeholder for Voronoi diagram generation
+        pass
 
+    def get_delaunay(self):
+        # Placeholder for Delaunay triangulation generation
+        pass
 
-class Connection:
-    '''Used as edges in the mapgraph. Not sure if this is useful beyond what is already implemented for edges in the graph.
-    If we only need getters/setters, then it's def not useful'''
-    def set_clockwise_neighbor(self, other: 'Connection'):
-        self.clockwise = other
+    def relax_points(self, iterations=1):
+        # Placeholder for Lloyd's relaxation algorithm
+        pass
 
-    def set_counterclockwise_neighbor(self, other: 'Connection'):
-        self.counterclockwise = other
-
-class MapNode:
+class ProvinceNode:
     '''Used as province capitals in the map graph'''
     def __init__(self, x = 0, y = 0):
         self.x = x
@@ -40,11 +37,11 @@ class MapNode:
 
         x = self.x + radius * np.cos(angle)
         y = self.y + radius * np.sin(angle)
-        return MapNode(x, y)
+        return ProvinceNode(x, y)
 
 class FlowSettings:
     num_players = 6
     num_prov_per_player = 15
     map_size_x = 30000
     map_size_y = 30000
-    cap_connections = 6
+    cap_connections = 4
