@@ -21,6 +21,15 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 - [Output & Export (G)](#output--export)
 - [Development Strategy](#development-strategy--sequencing)
 
+**Current High Prio**
+1. B.1
+2. C.1
+
+**Next features**
+- C.2, C.4
+- C.3 and D
+- A
+
 ---
 
 # FOUNDATION INFRASTRUCTURE
@@ -168,15 +177,16 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 - **Blocked by**: B.2.2
 
 ### B.3 WFC Debug & Entropy Tracking Framework
-- **Status**: Not started
+- **Status**: In progress
 - **Skill**: Developer
 - **Description**: Tools to visualize WFC state evolution and diagnose generation problems
 - **Action items**:
-  - [ ] Extend WFC with state snapshots at key iterations
-  - [ ] Create entropy metrics tracker (per element, per terrain type)
+  - [x] Extend WFC with state snapshots at key iterations
+  - [x] Create entropy metrics tracker (per element, per terrain type)
   - [ ] Build visualization for intermediate maps (images/checkpoints)
   - [ ] Create comparison tools (iteration N vs N+K)
   - [ ] Add logging: option distribution, weight changes, rule firings
+    Implemented so far: selected-element option-distribution logging and full per-step entropy surface logging behind debug flags.
 - **Deliverables**:
   - Entropy time-series data during/after generation
   - Checkpoint images for visual debugging
@@ -588,10 +598,10 @@ Best for: **Small team, stable foundation, iterative improvement**
 ### Path B: Parallel Development (for larger teams)
 ```
 A  ─┬─→ B.1 (WFC Fix) ─→ B.2 (Geo) ─→ C/D ──┐
-    │                                        │
+    │                                       │
     ├─→ B.3 (Debug) ──────────────────────→ F (UI)
-    │                                        │
-    └─→ E (Advanced) ──────────────────────┤
+    │                                       │
+    └─→ E (Advanced) ───────────────────────┤
                                             ↓
                                         G (Output)
 ```

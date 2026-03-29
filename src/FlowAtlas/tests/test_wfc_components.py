@@ -850,8 +850,128 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
 
         self.assertIn('WFC Progress Report', progress_text)
         self.assertIn('snapshots=', progress_text)
+        self.assertIn('iteration_snapshots=', progress_text)
         self.assertIn('WFC Final Distribution Report', final_text)
         self.assertIn('rule=', final_text)
+
+    def test_wfc_debug_entropy_history_and_selected_metadata(self):
+        """Debug stats should include entropy time-series and selected element metadata."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.6, 'forest': 0.4},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_track_entropy_metrics': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+        self.assertEqual(len(debug_stats['entropy_history']), debug_stats['steps'])
+        self.assertGreater(debug_stats['latest_entropy']['all']['count'], 0)
+
+        first_progress_entry = debug_stats['progress'][0]
+        self.assertIn('selected_element_id', first_progress_entry)
+        self.assertIn('selected_entropy', first_progress_entry)
+        self.assertIn('entropy_summary', first_progress_entry)
+
+    def test_wfc_debug_option_distribution_storage(self):
+        """Step snapshots should optionally include selected option distributions."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.7, 'forest': 0.3},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_store_option_distributions': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        first_progress_entry = wfc.get_debug_statistics()['progress'][0]
+        self.assertIn('selected_option_distribution', first_progress_entry)
+        self.assertGreaterEqual(len(first_progress_entry['selected_option_distribution']), 1)
+
+    def test_wfc_debug_iteration_snapshots_capture_checkpoints(self):
+        """Collector should store periodic checkpoint snapshots during the run."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C", "D"])
+        graph.add_edges_from([("A", "B"), ("B", "C"), ("C", "D")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': False,
+            'debug_wfc_store_iteration_snapshots': True,
+            'debug_wfc_snapshot_every': 2,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+        checkpoints = debug_stats['iteration_snapshots']
+        self.assertGreaterEqual(len(checkpoints), 2)
+        self.assertEqual(checkpoints[0]['step'], 1)
+        self.assertEqual(checkpoints[-1]['step'], debug_stats['steps'])
+        self.assertIn('province_terrain_counts', checkpoints[-1])
+        self.assertIn('border_terrain_counts', checkpoints[-1])
+
+    def test_wfc_debug_can_store_full_entropy_maps_for_all_unset_elements(self):
+        """Optional entropy surface logging should persist per-step entropy for all unset elements."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_track_entropy_metrics': True,
+            'debug_wfc_store_full_entropy_maps': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+        entropy_surfaces = debug_stats['entropy_surfaces']
+
+        self.assertEqual(len(entropy_surfaces), debug_stats['steps'])
+        self.assertIn('all', entropy_surfaces[0])
+        self.assertIn('province', entropy_surfaces[0])
+        self.assertIn('border', entropy_surfaces[0])
+        self.assertGreater(len(entropy_surfaces[0]['all']), 0)
+
+        progress_text = wfc.format_debug_progress_report()
+        self.assertIn('entropy_surfaces=', progress_text)
 
     def test_wfc_debug_disabled_skips_debug_bookkeeping(self):
         """When debug is off, collapse should not collect step snapshots or final reports."""
@@ -899,8 +1019,13 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertFalse(wfc.debug_print_progress_report)
         self.assertFalse(wfc.debug_print_final_report)
         self.assertFalse(wfc.debug_wfc_timing)
+        self.assertFalse(wfc.debug_store_step_snapshots)
+        self.assertFalse(wfc.debug_store_iteration_snapshots)
+        self.assertFalse(wfc.debug_track_entropy_metrics)
+        self.assertFalse(wfc.debug_store_option_distributions)
+        self.assertFalse(wfc.debug_store_full_entropy_maps)
 
-        # Test 1 (basic) preset: statistics and progress on, reports and timing off
+        # Test 1 (basic) preset: lightweight runtime debug, no heavier diagnostics
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
         wfc_settings['debug_wfc_level'] = 1
         wfc = WaveFunctionCollapse(wfc_settings, graph)
@@ -909,16 +1034,41 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertFalse(wfc.debug_print_progress_report)
         self.assertFalse(wfc.debug_print_final_report)
         self.assertFalse(wfc.debug_wfc_timing)
+        self.assertTrue(wfc.debug_store_step_snapshots)
+        self.assertFalse(wfc.debug_store_iteration_snapshots)
+        self.assertFalse(wfc.debug_track_entropy_metrics)
+        self.assertFalse(wfc.debug_store_option_distributions)
+        self.assertFalse(wfc.debug_store_full_entropy_maps)
 
-        # Test 2 (verbose) preset: all flags True
+        # Test 2 (verbose) preset: rich summaries, timing, and entropy snapshots
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
         wfc_settings['debug_wfc_level'] = 2
         wfc = WaveFunctionCollapse(wfc_settings, graph)
         self.assertTrue(wfc.debug_enabled)
         self.assertTrue(wfc.debug_print_progress)
         self.assertTrue(wfc.debug_print_progress_report)
+        self.assertFalse(wfc.debug_print_final_report)
+        self.assertTrue(wfc.debug_wfc_timing)
+        self.assertTrue(wfc.debug_store_step_snapshots)
+        self.assertTrue(wfc.debug_store_iteration_snapshots)
+        self.assertTrue(wfc.debug_track_entropy_metrics)
+        self.assertFalse(wfc.debug_store_option_distributions)
+        self.assertFalse(wfc.debug_store_full_entropy_maps)
+
+        # Test 3 (max diagnostics) preset: highest level should turn everything on
+        wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
+        wfc_settings['debug_wfc_level'] = 3
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        self.assertTrue(wfc.debug_enabled)
+        self.assertTrue(wfc.debug_print_progress)
+        self.assertTrue(wfc.debug_print_progress_report)
         self.assertTrue(wfc.debug_print_final_report)
         self.assertTrue(wfc.debug_wfc_timing)
+        self.assertTrue(wfc.debug_store_step_snapshots)
+        self.assertTrue(wfc.debug_store_iteration_snapshots)
+        self.assertTrue(wfc.debug_track_entropy_metrics)
+        self.assertTrue(wfc.debug_store_option_distributions)
+        self.assertTrue(wfc.debug_store_full_entropy_maps)
 
     def test_wfc_debug_level_explicit_flags_override_presets(self):
         """Verify explicit flags override preset defaults."""
@@ -943,9 +1093,9 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertFalse(wfc.debug_print_progress)  # Still off (from preset)
         self.assertTrue(wfc.debug_wfc_timing)  # Overridden to True
 
-        # Set preset to 2 (verbose) but override one flag to False
+        # Set preset to 3 (max diagnostics) but override one flag to False
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
-        wfc_settings['debug_wfc_level'] = 2
+        wfc_settings['debug_wfc_level'] = 3
         wfc_settings['debug_wfc_timing'] = False  # Explicit override
         wfc = WaveFunctionCollapse(wfc_settings, graph)
 

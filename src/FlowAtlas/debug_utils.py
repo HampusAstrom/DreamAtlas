@@ -135,7 +135,17 @@ class DebugStatisticsCollector:
         4. Access via get_statistics() for data, or use formatter for output
     """
 
-    def __init__(self, graph, rule_managers: list, store_step_snapshots: bool = True):
+    def __init__(
+        self,
+        graph,
+        rule_managers: list,
+        store_step_snapshots: bool = True,
+        store_iteration_snapshots: bool = False,
+        snapshot_every: int = 25,
+        track_entropy_metrics: bool = True,
+        store_option_distributions: bool = False,
+        store_full_entropy_maps: bool = False,
+    ):
         """
         Initialize collector for a specific generation run.
 
@@ -147,6 +157,11 @@ class DebugStatisticsCollector:
         self.graph = graph
         self.rule_managers = rule_managers
         self.store_step_snapshots = store_step_snapshots
+        self.store_iteration_snapshots = store_iteration_snapshots
+        self.snapshot_every = max(1, int(snapshot_every))
+        self.track_entropy_metrics = track_entropy_metrics
+        self.store_option_distributions = store_option_distributions
+        self.store_full_entropy_maps = store_full_entropy_maps
         self.stats = self._make_empty_stats()
 
     def _make_empty_stats(self) -> dict:
@@ -160,6 +175,14 @@ class DebugStatisticsCollector:
                 'border_assignment_seconds': 0.0,
                 'mean_step_seconds': 0.0,
             },
+            'entropy_history': [],
+            'latest_entropy': {
+                'all': {'count': 0, 'min': 0.0, 'max': 0.0, 'mean': 0.0},
+                'province': {'count': 0, 'min': 0.0, 'max': 0.0, 'mean': 0.0},
+                'border': {'count': 0, 'min': 0.0, 'max': 0.0, 'mean': 0.0},
+            },
+            'entropy_surfaces': [],
+            'iteration_snapshots': [],
             'progress': [],
             'progress_windows': [],
             'window_state': {
@@ -174,6 +197,26 @@ class DebugStatisticsCollector:
             },
             'final_report': {},
         }
+
+    def _capture_iteration_snapshot(self, step: int):
+        """Capture a compact graph state snapshot for diagnostics at selected steps."""
+        province_counts = {}
+        border_counts = {}
+
+        for element in self.graph.get_all_elements():
+            terrain = element.get('terrain', None)
+            if terrain is None:
+                continue
+
+            counts = province_counts if element.is_province else border_counts
+            counts[terrain] = counts.get(terrain, 0) + 1
+
+        self.stats['iteration_snapshots'].append({
+            'step': step,
+            **self._get_progress_state(),
+            'province_terrain_counts': province_counts,
+            'border_terrain_counts': border_counts,
+        })
 
     def _iter_dist_rules(self):
         """Iterate over all DistRule instances in rule managers."""
@@ -252,6 +295,32 @@ class DebugStatisticsCollector:
         window_counts[terrain] = window_counts.get(terrain, 0) + 1
         self.stats['window_state']['steps'] += 1
 
+        entropy_diagnostics = step_info.get('entropy_diagnostics')
+        if self.track_entropy_metrics and isinstance(entropy_diagnostics, dict):
+            entropy_summary = entropy_diagnostics.get('summary', {})
+            entropy_entry = {
+                'step': self.stats['steps'],
+                'selected_element_id': step_info.get('selected_element_id'),
+                'selected_entropy': float(entropy_diagnostics.get('selected_entropy', 0.0)),
+                'all': dict(entropy_summary.get('all', {})),
+                'province': dict(entropy_summary.get('province', {})),
+                'border': dict(entropy_summary.get('border', {})),
+            }
+            self.stats['entropy_history'].append(entropy_entry)
+            self.stats['latest_entropy'] = {
+                'all': entropy_entry['all'],
+                'province': entropy_entry['province'],
+                'border': entropy_entry['border'],
+            }
+
+            if self.store_full_entropy_maps:
+                self.stats['entropy_surfaces'].append({
+                    'step': self.stats['steps'],
+                    'all': dict(entropy_diagnostics.get('all', {})),
+                    'province': dict(entropy_diagnostics.get('province', {})),
+                    'border': dict(entropy_diagnostics.get('border', {})),
+                })
+
         # Track per-rule importance and weighted counts
         element_flags = step_info.get('element_flags', {})
         for manager, rule in self._iter_dist_rules():
@@ -283,9 +352,28 @@ class DebugStatisticsCollector:
                 'selected_terrain': step_info['selected_terrain'],
                 'selected_probability': step_info['selected_probability'],
                 'step_seconds': step_seconds if step_seconds is not None else 0.0,
+                'selected_element_id': step_info.get('selected_element_id'),
+                'unset_elements_before_step': step_info.get('unset_elements_before_step'),
                 **self._get_progress_state(),
             }
+
+            if self.track_entropy_metrics and isinstance(entropy_diagnostics, dict):
+                progress_entry['selected_entropy'] = float(entropy_diagnostics.get('selected_entropy', 0.0))
+                progress_entry['entropy_summary'] = dict(entropy_diagnostics.get('summary', {}))
+
+            if self.store_option_distributions and 'selected_option_distribution' in step_info:
+                progress_entry['selected_option_distribution'] = dict(step_info['selected_option_distribution'])
+
             self.stats['progress'].append(progress_entry)
+
+        should_snapshot = (
+            self.store_iteration_snapshots and (
+                self.stats['steps'] == 1 or
+                self.stats['steps'] % self.snapshot_every == 0
+            )
+        )
+        if should_snapshot:
+            self._capture_iteration_snapshot(self.stats['steps'])
 
     def _build_window_kind_report(self, kind: str, kind_domain: tuple) -> dict:
         """Build aggregated report for a kind (province/border) in current window."""
@@ -465,6 +553,9 @@ class DebugStatisticsCollector:
         """
         if self.stats['steps'] > 0:
             self.stats['timing']['mean_step_seconds'] = total_seconds / self.stats['steps']
+            if self.store_iteration_snapshots:
+                if not self.stats['iteration_snapshots'] or self.stats['iteration_snapshots'][-1]['step'] != self.stats['steps']:
+                    self._capture_iteration_snapshot(self.stats['steps'])
         self.stats['final_report'] = self.build_final_report()
 
     def get_statistics(self) -> dict:
@@ -658,7 +749,21 @@ class DebugReportFormatter:
                 f"mean_step:{stats['timing']['mean_step_seconds']:.3f}"
             ),
             f"snapshots={len(stats['progress'])}",
+            f"iteration_snapshots={len(stats.get('iteration_snapshots', []))}",
+            f"entropy_surfaces={len(stats.get('entropy_surfaces', []))}",
         ]
+
+        latest_entropy = stats.get('latest_entropy', {})
+        if latest_entropy:
+            all_entropy = latest_entropy.get('all', {})
+            if all_entropy.get('count', 0) > 0:
+                lines.append(
+                    "latest_entropy="
+                    f"count:{all_entropy.get('count', 0)}, "
+                    f"min:{all_entropy.get('min', 0.0):.3f}, "
+                    f"mean:{all_entropy.get('mean', 0.0):.3f}, "
+                    f"max:{all_entropy.get('max', 0.0):.3f}"
+                )
 
         if stats['progress']:
             first = stats['progress'][0]
@@ -695,6 +800,8 @@ class DebugReportFormatter:
             return "WFC final report is empty (run wave_function_collapse() first)."
 
         lines = ["WFC Final Distribution Report"]
+        if stats.get('entropy_history'):
+            lines.append(f"entropy_samples={len(stats['entropy_history'])}")
 
         observed = final_report.get('observed', {})
         observed_province = observed.get('province', {})

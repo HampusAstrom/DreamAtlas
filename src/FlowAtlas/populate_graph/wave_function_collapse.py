@@ -405,22 +405,45 @@ class WaveFunctionCollapse:
     def step_wave_function_collapse(self, capture_debug_step: bool = False):
         # perform a single step of the wave function collapse process
         element_to_set = select_element_to_set(self.graph)
-        terrain = select_element_terrain(element_to_set, self.graph)
         if not capture_debug_step:
+            terrain = select_element_terrain(element_to_set, self.graph)
             self.set_element_terrain(element_to_set, terrain)
             return None
 
+        # debug only path
+        entropy_diagnostics = self._collect_entropy_metrics_from_unset_elements() if self.debug_track_entropy_metrics else None
+        option_distribution = dict(element_to_set['joint_prob_dist']) if self.debug_store_option_distributions else None
+        terrain = select_element_terrain(element_to_set, self.graph)
+
         selected_probability = element_to_set['joint_prob_dist'][terrain]
         element_kind = 'province' if element_to_set.is_province else 'border'
+        selected_element_id = self._element_debug_id(element_to_set)
         flags_raw = element_to_set.get('flags', {})
         element_flags = dict(flags_raw) if isinstance(flags_raw, dict) else {}
+        unset_before_step = len(list(self.graph.get_unset_elements()))
+
+        if entropy_diagnostics is not None:
+            entropy_diagnostics['selected_element_id'] = selected_element_id
+            entropy_diagnostics['selected_entropy'] = shannon_entropy(element_to_set['joint_prob_dist'])
+
         self.set_element_terrain(element_to_set, terrain)
-        return {
+
+        step_info = {
             'element_kind': element_kind,
             'selected_terrain': terrain,
             'selected_probability': selected_probability,
             'element_flags': element_flags,
+            'selected_element_id': selected_element_id,
+            'unset_elements_before_step': unset_before_step,
         }
+
+        if entropy_diagnostics is not None:
+            step_info['entropy_diagnostics'] = entropy_diagnostics
+
+        if option_distribution is not None:
+            step_info['selected_option_distribution'] = option_distribution
+
+        return step_info
 
     # the main control flow function for the wave function collapse process
     # taking in a graph and any settings and returning a graph with terrains set
@@ -467,32 +490,101 @@ class WaveFunctionCollapse:
     # ===== DEBUG STATISTICS & REPORTING (Optional instrumentation) =====
     # Keep the main WFC control flow above and the debug plumbing here.
 
+    def _element_debug_id(self, element: Element) -> str:
+        """Create a stable debug id string for an element."""
+        if element.is_node:
+            return f"province:{element.element_id}"
+
+        edge_id = element.element_id
+        if isinstance(edge_id, tuple) and len(edge_id) >= 2:
+            return f"border:{edge_id[0]}-{edge_id[1]}"
+        return f"border:{edge_id}"
+
+    def _collect_entropy_metrics_from_unset_elements(self) -> dict:
+        """Collect per-step entropy diagnostics for all currently unset elements."""
+        all_entropies = {}
+        province_entropies = {}
+        border_entropies = {}
+
+        for element in self.graph.get_unset_elements():
+            element_id = self._element_debug_id(element)
+            entropy = shannon_entropy(element['joint_prob_dist'])
+            all_entropies[element_id] = entropy
+            if element.is_province:
+                province_entropies[element_id] = entropy
+            else:
+                border_entropies[element_id] = entropy
+
+        def _summary(values: dict) -> dict:
+            if not values:
+                return {
+                    'count': 0,
+                    'min': 0.0,
+                    'max': 0.0,
+                    'mean': 0.0,
+                }
+
+            value_list = list(values.values())
+            return {
+                'count': len(value_list),
+                'min': min(value_list),
+                'max': max(value_list),
+                'mean': float(np.mean(value_list)),
+            }
+
+        return {
+            'all': all_entropies,
+            'province': province_entropies,
+            'border': border_entropies,
+            'summary': {
+                'all': _summary(all_entropies),
+                'province': _summary(province_entropies),
+                'border': _summary(border_entropies),
+            },
+        }
+
     def _setup_debug_configuration(self):
         """Apply debug level presets and initialize debug flags and collector."""
         debug_level = int(self.settings.get('debug_wfc_level', 0))
-        level_defaults = {
+        level_additions = {
             0: {
                 'debug_wfc_statistics': False,
                 'debug_wfc_print_progress': False,
                 'debug_wfc_print_progress_report': False,
                 'debug_wfc_print_final_report': False,
                 'debug_wfc_timing': False,
+                'debug_wfc_store_step_snapshots': False,
+                'debug_wfc_store_iteration_snapshots': False,
+                'debug_wfc_track_entropy_metrics': False,
+                'debug_wfc_store_option_distributions': False,
+                'debug_wfc_store_full_entropy_maps': False,
             },
             1: {
                 'debug_wfc_statistics': True,
                 'debug_wfc_print_progress': True,
-                'debug_wfc_print_progress_report': False,
-                'debug_wfc_print_final_report': False,
-                'debug_wfc_timing': False,
+                'debug_wfc_store_step_snapshots': True,
             },
             2: {
-                'debug_wfc_statistics': True,
-                'debug_wfc_print_progress': True,
                 'debug_wfc_print_progress_report': True,
-                'debug_wfc_print_final_report': True,
                 'debug_wfc_timing': True,
+                'debug_wfc_store_iteration_snapshots': True,
+                'debug_wfc_track_entropy_metrics': True,
+            },
+            3: {
+                'debug_wfc_print_final_report': True,
+                'debug_wfc_store_option_distributions': True,
+                'debug_wfc_store_full_entropy_maps': True,
             },
         }
+
+        level_defaults = {}
+        cumulative_defaults = {}
+        for level in sorted(level_additions):
+            cumulative_defaults = {
+                **cumulative_defaults,
+                **level_additions[level],
+            }
+            level_defaults[level] = dict(cumulative_defaults)
 
         defaults = level_defaults.get(debug_level, level_defaults[0])
         for key, default_val in defaults.items():
@@ -503,6 +595,11 @@ class WaveFunctionCollapse:
         self.debug_print_progress = bool(self.settings.get('debug_wfc_print_progress', False))
         self.debug_print_every = max(1, int(self.settings.get('debug_wfc_print_every', 25)))
         self.debug_store_step_snapshots = bool(self.settings.get('debug_wfc_store_step_snapshots', True))
+        self.debug_store_iteration_snapshots = bool(self.settings.get('debug_wfc_store_iteration_snapshots', False))
+        self.debug_snapshot_every = max(1, int(self.settings.get('debug_wfc_snapshot_every', 25)))
+        self.debug_track_entropy_metrics = bool(self.settings.get('debug_wfc_track_entropy_metrics', True))
+        self.debug_store_option_distributions = bool(self.settings.get('debug_wfc_store_option_distributions', False))
+        self.debug_store_full_entropy_maps = bool(self.settings.get('debug_wfc_store_full_entropy_maps', False))
         self.debug_print_progress_report = bool(self.settings.get('debug_wfc_print_progress_report', False))
         self.debug_print_final_report = bool(self.settings.get('debug_wfc_print_final_report', False))
         self.debug_wfc_timing = bool(self.settings.get('debug_wfc_timing', False))
@@ -512,6 +609,11 @@ class WaveFunctionCollapse:
             self.graph,
             self.rule_managers,
             store_step_snapshots=self.debug_store_step_snapshots,
+            store_iteration_snapshots=self.debug_store_iteration_snapshots,
+            snapshot_every=self.debug_snapshot_every,
+            track_entropy_metrics=self.debug_track_entropy_metrics,
+            store_option_distributions=self.debug_store_option_distributions,
+            store_full_entropy_maps=self.debug_store_full_entropy_maps,
         )
         self.debug_stats = self.debug_collector.stats
         self.debug_stats['enabled'] = self.debug_enabled

@@ -192,7 +192,7 @@ def test_wfc():
     points = spread_points(points)
     graph_plain, voronoi = voronoi_and_graph(points)
 
-    wfc_settings['debug_wfc_level'] = 2
+    wfc_settings['debug_wfc_level'] = 3
 
     wfc = WaveFunctionCollapse(wfc_settings, graph_plain)
     # overwriting graph with new (TerrainGraph) with assignments
