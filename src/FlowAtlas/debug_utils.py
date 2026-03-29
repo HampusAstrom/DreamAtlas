@@ -145,6 +145,8 @@ class DebugStatisticsCollector:
         track_entropy_metrics: bool = True,
         store_option_distributions: bool = False,
         store_full_entropy_maps: bool = False,
+        track_rule_firings: bool = False,
+        track_weight_changes: bool = False,
     ):
         """
         Initialize collector for a specific generation run.
@@ -162,6 +164,8 @@ class DebugStatisticsCollector:
         self.track_entropy_metrics = track_entropy_metrics
         self.store_option_distributions = store_option_distributions
         self.store_full_entropy_maps = store_full_entropy_maps
+        self.track_rule_firings = track_rule_firings
+        self.track_weight_changes = track_weight_changes
         self.stats = self._make_empty_stats()
 
     def _make_empty_stats(self) -> dict:
@@ -181,6 +185,9 @@ class DebugStatisticsCollector:
                 'province': {'count': 0, 'min': 0.0, 'max': 0.0, 'mean': 0.0},
                 'border': {'count': 0, 'min': 0.0, 'max': 0.0, 'mean': 0.0},
             },
+            'rule_firing_history': [],
+            'rule_firing_counts': {},
+            'weight_change_history': [],
             'entropy_surfaces': [],
             'iteration_snapshots': [],
             'progress': [],
@@ -321,6 +328,26 @@ class DebugStatisticsCollector:
                     'border': dict(entropy_diagnostics.get('border', {})),
                 })
 
+        rule_diagnostics = step_info.get('rule_diagnostics')
+        if self.track_rule_firings and isinstance(rule_diagnostics, dict):
+            fired_rules = list(rule_diagnostics.get('fired_rules', []))
+            self.stats['rule_firing_history'].append({
+                'step': self.stats['steps'],
+                'fired_rules': fired_rules,
+            })
+            for fired in fired_rules:
+                manager = fired.get('manager', 'unknown')
+                rule_key = fired.get('rule_key', 'unknown')
+                count_key = f"{manager}::{rule_key}"
+                self.stats['rule_firing_counts'][count_key] = self.stats['rule_firing_counts'].get(count_key, 0) + 1
+
+        if self.track_weight_changes and isinstance(rule_diagnostics, dict):
+            weight_changes = list(rule_diagnostics.get('weight_changes', []))
+            self.stats['weight_change_history'].append({
+                'step': self.stats['steps'],
+                'changes': weight_changes,
+            })
+
         # Track per-rule importance and weighted counts
         element_flags = step_info.get('element_flags', {})
         for manager, rule in self._iter_dist_rules():
@@ -363,6 +390,12 @@ class DebugStatisticsCollector:
 
             if self.store_option_distributions and 'selected_option_distribution' in step_info:
                 progress_entry['selected_option_distribution'] = dict(step_info['selected_option_distribution'])
+
+            if self.track_rule_firings and isinstance(rule_diagnostics, dict):
+                progress_entry['fired_rules'] = list(rule_diagnostics.get('fired_rules', []))
+
+            if self.track_weight_changes and isinstance(rule_diagnostics, dict):
+                progress_entry['weight_changes'] = list(rule_diagnostics.get('weight_changes', []))
 
             self.stats['progress'].append(progress_entry)
 
@@ -449,6 +482,50 @@ class DebugStatisticsCollector:
         }
 
         return summary
+
+    def compare_iteration_snapshots(self, step_a: int, step_b: int) -> dict:
+        """
+        Compare two stored iteration snapshots and return terrain/count deltas.
+
+        Args:
+            step_a: First snapshot step number
+            step_b: Second snapshot step number
+
+        Returns:
+            Dict containing completion delta and per-terrain count deltas.
+        """
+        snapshots = self.stats.get('iteration_snapshots', [])
+        by_step = {entry['step']: entry for entry in snapshots}
+
+        if step_a not in by_step:
+            raise ValueError(f"No iteration snapshot stored for step {step_a}")
+        if step_b not in by_step:
+            raise ValueError(f"No iteration snapshot stored for step {step_b}")
+
+        first = by_step[step_a]
+        second = by_step[step_b]
+
+        def _terrain_delta(counts_a: dict, counts_b: dict) -> dict:
+            delta = {}
+            for terrain in set(counts_a.keys()) | set(counts_b.keys()):
+                delta[terrain] = counts_b.get(terrain, 0) - counts_a.get(terrain, 0)
+            return delta
+
+        return {
+            'from_step': step_a,
+            'to_step': step_b,
+            'completion_ratio_delta': second.get('completion_ratio', 0.0) - first.get('completion_ratio', 0.0),
+            'set_provinces_delta': second.get('set_provinces', 0) - first.get('set_provinces', 0),
+            'set_borders_delta': second.get('set_borders', 0) - first.get('set_borders', 0),
+            'province_terrain_count_delta': _terrain_delta(
+                first.get('province_terrain_counts', {}),
+                second.get('province_terrain_counts', {}),
+            ),
+            'border_terrain_count_delta': _terrain_delta(
+                first.get('border_terrain_counts', {}),
+                second.get('border_terrain_counts', {}),
+            ),
+        }
 
     def build_final_report(self) -> dict:
         """
@@ -751,6 +828,8 @@ class DebugReportFormatter:
             f"snapshots={len(stats['progress'])}",
             f"iteration_snapshots={len(stats.get('iteration_snapshots', []))}",
             f"entropy_surfaces={len(stats.get('entropy_surfaces', []))}",
+            f"rule_firing_samples={len(stats.get('rule_firing_history', []))}",
+            f"weight_change_samples={len(stats.get('weight_change_history', []))}",
         ]
 
         latest_entropy = stats.get('latest_entropy', {})

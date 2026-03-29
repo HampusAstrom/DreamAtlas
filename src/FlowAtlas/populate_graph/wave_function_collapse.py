@@ -426,7 +426,16 @@ class WaveFunctionCollapse:
             entropy_diagnostics['selected_element_id'] = selected_element_id
             entropy_diagnostics['selected_entropy'] = shannon_entropy(element_to_set['joint_prob_dist'])
 
+        rule_diag_before = None
+        if self.debug_track_rule_firings or self.debug_track_weight_changes:
+            rule_diag_before = self._collect_rule_state_for_debug()
+
         self.set_element_terrain(element_to_set, terrain)
+
+        rule_diagnostics = None
+        if rule_diag_before is not None:
+            rule_diag_after = self._collect_rule_state_for_debug()
+            rule_diagnostics = self._summarize_rule_state_deltas(rule_diag_before, rule_diag_after)
 
         step_info = {
             'element_kind': element_kind,
@@ -442,6 +451,9 @@ class WaveFunctionCollapse:
 
         if option_distribution is not None:
             step_info['selected_option_distribution'] = option_distribution
+
+        if rule_diagnostics is not None:
+            step_info['rule_diagnostics'] = rule_diagnostics
 
         return step_info
 
@@ -543,6 +555,93 @@ class WaveFunctionCollapse:
             },
         }
 
+    def _collect_rule_state_for_debug(self) -> dict:
+        """Collect a lightweight snapshot of mutable rule state for delta analysis."""
+        snapshot = {}
+        for manager in self.rule_managers:
+            manager_state = {}
+            for rule in manager.rules:
+                rule_key = getattr(rule, 'rule_key', f"{rule.__class__.__name__}:{id(rule)}")
+                rule_state: dict[str, object] = {
+                    'rule_type': rule.__class__.__name__,
+                }
+
+                # Dist-like rules expose mutable adjusting distributions used in selection weighting.
+                if hasattr(rule, 'adjusting_province_dist') and hasattr(rule, 'adjusting_border_dist'):
+                    province_dist = getattr(rule, 'adjusting_province_dist')
+                    border_dist = getattr(rule, 'adjusting_border_dist')
+                    if isinstance(province_dist, dict):
+                        rule_state['adjusting_province_dist'] = dict(province_dist)
+                    if isinstance(border_dist, dict):
+                        rule_state['adjusting_border_dist'] = dict(border_dist)
+
+                manager_state[rule_key] = rule_state
+
+            snapshot[manager.name] = manager_state
+
+        return snapshot
+
+    def _summarize_rule_state_deltas(self, before: dict, after: dict) -> dict:
+        """Build step-level rule diagnostics from state before/after assignment."""
+        fired_rules = []
+        weight_change_summary = []
+
+        for manager_name, manager_after in after.items():
+            manager_before = before.get(manager_name, {})
+            for rule_key, rule_after in manager_after.items():
+                rule_before = manager_before.get(rule_key, {})
+                province_before = rule_before.get('adjusting_province_dist', {})
+                province_after = rule_after.get('adjusting_province_dist', {})
+                border_before = rule_before.get('adjusting_border_dist', {})
+                border_after = rule_after.get('adjusting_border_dist', {})
+
+                province_changed = province_before != province_after
+                border_changed = border_before != border_after
+                changed = province_changed or border_changed
+
+                if not changed:
+                    continue
+
+                fired_rules.append({
+                    'manager': manager_name,
+                    'rule_key': rule_key,
+                    'rule_type': rule_after.get('rule_type', 'unknown'),
+                })
+
+                if self.debug_track_weight_changes:
+                    for terrain, after_val in province_after.items():
+                        before_val = province_before.get(terrain)
+                        if before_val is None or before_val == after_val:
+                            continue
+                        weight_change_summary.append({
+                            'manager': manager_name,
+                            'rule_key': rule_key,
+                            'element_kind': 'province',
+                            'terrain': terrain,
+                            'before': before_val,
+                            'after': after_val,
+                            'delta': after_val - before_val,
+                        })
+
+                    for terrain, after_val in border_after.items():
+                        before_val = border_before.get(terrain)
+                        if before_val is None or before_val == after_val:
+                            continue
+                        weight_change_summary.append({
+                            'manager': manager_name,
+                            'rule_key': rule_key,
+                            'element_kind': 'border',
+                            'terrain': terrain,
+                            'before': before_val,
+                            'after': after_val,
+                            'delta': after_val - before_val,
+                        })
+
+        return {
+            'fired_rules': fired_rules,
+            'weight_changes': weight_change_summary,
+        }
+
     def _setup_debug_configuration(self):
         """Apply debug level presets and initialize debug flags and collector."""
         debug_level = int(self.settings.get('debug_wfc_level', 0))
@@ -558,6 +657,8 @@ class WaveFunctionCollapse:
                 'debug_wfc_track_entropy_metrics': False,
                 'debug_wfc_store_option_distributions': False,
                 'debug_wfc_store_full_entropy_maps': False,
+                'debug_wfc_track_rule_firings': False,
+                'debug_wfc_track_weight_changes': False,
             },
             1: {
                 'debug_wfc_statistics': True,
@@ -574,6 +675,8 @@ class WaveFunctionCollapse:
                 'debug_wfc_print_final_report': True,
                 'debug_wfc_store_option_distributions': True,
                 'debug_wfc_store_full_entropy_maps': True,
+                'debug_wfc_track_rule_firings': True,
+                'debug_wfc_track_weight_changes': True,
             },
         }
 
@@ -600,6 +703,8 @@ class WaveFunctionCollapse:
         self.debug_track_entropy_metrics = bool(self.settings.get('debug_wfc_track_entropy_metrics', True))
         self.debug_store_option_distributions = bool(self.settings.get('debug_wfc_store_option_distributions', False))
         self.debug_store_full_entropy_maps = bool(self.settings.get('debug_wfc_store_full_entropy_maps', False))
+        self.debug_track_rule_firings = bool(self.settings.get('debug_wfc_track_rule_firings', False))
+        self.debug_track_weight_changes = bool(self.settings.get('debug_wfc_track_weight_changes', False))
         self.debug_print_progress_report = bool(self.settings.get('debug_wfc_print_progress_report', False))
         self.debug_print_final_report = bool(self.settings.get('debug_wfc_print_final_report', False))
         self.debug_wfc_timing = bool(self.settings.get('debug_wfc_timing', False))
@@ -614,6 +719,8 @@ class WaveFunctionCollapse:
             track_entropy_metrics=self.debug_track_entropy_metrics,
             store_option_distributions=self.debug_store_option_distributions,
             store_full_entropy_maps=self.debug_store_full_entropy_maps,
+            track_rule_firings=self.debug_track_rule_firings,
+            track_weight_changes=self.debug_track_weight_changes,
         )
         self.debug_stats = self.debug_collector.stats
         self.debug_stats['enabled'] = self.debug_enabled
@@ -654,6 +761,13 @@ class WaveFunctionCollapse:
             self.debug_stats,
             include_distribution_metrics=self.debug_wfc_print_distribution_metrics,
         )
+
+    def compare_debug_iteration_snapshots(self, step_a: int, step_b: int) -> dict:
+        """Compare two stored iteration snapshots by step number."""
+        if not self.debug_enabled:
+            raise RuntimeError("WFC debug statistics are disabled (set debug_wfc_statistics=True).")
+
+        return self.debug_collector.compare_iteration_snapshots(step_a, step_b)
 
 
 

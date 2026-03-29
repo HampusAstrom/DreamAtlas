@@ -184,9 +184,10 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
   - [x] Extend WFC with state snapshots at key iterations
   - [x] Create entropy metrics tracker (per element, per terrain type)
   - [ ] Build visualization for intermediate maps (images/checkpoints)
-  - [ ] Create comparison tools (iteration N vs N+K)
-  - [ ] Add logging: option distribution, weight changes, rule firings
-    Implemented so far: selected-element option-distribution logging and full per-step entropy surface logging behind debug flags.
+  - [x] Create comparison tools (iteration N vs N+K)
+  - [x] Add logging: option distribution, weight changes, rule firings
+    Implemented: selected-element option-distribution logging, full per-step entropy surface logging, and per-step rule-firing/adjusting-weight deltas behind debug flags.
+  - Iteration comparison tool available via `WaveFunctionCollapse.compare_debug_iteration_snapshots(step_a, step_b)`.
 - **Deliverables**:
   - Entropy time-series data during/after generation
   - Checkpoint images for visual debugging

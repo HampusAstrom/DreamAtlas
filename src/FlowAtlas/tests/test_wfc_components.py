@@ -973,6 +973,69 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         progress_text = wfc.format_debug_progress_report()
         self.assertIn('entropy_surfaces=', progress_text)
 
+    def test_wfc_debug_can_compare_iteration_snapshots(self):
+        """Debug API should compare two iteration snapshots and return count deltas."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C", "D"])
+        graph.add_edges_from([("A", "B"), ("B", "C"), ("C", "D")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_iteration_snapshots': True,
+            'debug_wfc_snapshot_every': 2,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        checkpoints = wfc.get_debug_statistics()['iteration_snapshots']
+        first_step = checkpoints[0]['step']
+        last_step = checkpoints[-1]['step']
+        comparison = wfc.compare_debug_iteration_snapshots(first_step, last_step)
+
+        self.assertEqual(comparison['from_step'], first_step)
+        self.assertEqual(comparison['to_step'], last_step)
+        self.assertGreaterEqual(comparison['completion_ratio_delta'], 0.0)
+        self.assertIn('province_terrain_count_delta', comparison)
+        self.assertIn('border_terrain_count_delta', comparison)
+
+    def test_wfc_debug_can_track_rule_firings_and_weight_changes(self):
+        """Optional diagnostics should track rule firings and adjusting-dist changes by step."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B", "C"])
+        graph.add_edges_from([("A", "B"), ("B", "C")])
+
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'plains': 0.5, 'forest': 0.5},
+                'border_terrains': {'normal': 1.0},
+            },
+            'debug_wfc_statistics': True,
+            'debug_wfc_store_step_snapshots': True,
+            'debug_wfc_track_rule_firings': True,
+            'debug_wfc_track_weight_changes': True,
+            'debug_wfc_print_progress': False,
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        wfc = WaveFunctionCollapse(wfc_settings, graph)
+        wfc.wave_function_collapse()
+
+        debug_stats = wfc.get_debug_statistics()
+        self.assertEqual(len(debug_stats['rule_firing_history']), debug_stats['steps'])
+        self.assertEqual(len(debug_stats['weight_change_history']), debug_stats['steps'])
+        self.assertGreaterEqual(len(debug_stats['rule_firing_counts']), 1)
+
+        progress_text = wfc.format_debug_progress_report()
+        self.assertIn('rule_firing_samples=', progress_text)
+        self.assertIn('weight_change_samples=', progress_text)
+
     def test_wfc_debug_disabled_skips_debug_bookkeeping(self):
         """When debug is off, collapse should not collect step snapshots or final reports."""
         graph = TerrainGraph(settings={})
@@ -1024,6 +1087,8 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertFalse(wfc.debug_track_entropy_metrics)
         self.assertFalse(wfc.debug_store_option_distributions)
         self.assertFalse(wfc.debug_store_full_entropy_maps)
+        self.assertFalse(wfc.debug_track_rule_firings)
+        self.assertFalse(wfc.debug_track_weight_changes)
 
         # Test 1 (basic) preset: lightweight runtime debug, no heavier diagnostics
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
@@ -1039,6 +1104,8 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertFalse(wfc.debug_track_entropy_metrics)
         self.assertFalse(wfc.debug_store_option_distributions)
         self.assertFalse(wfc.debug_store_full_entropy_maps)
+        self.assertFalse(wfc.debug_track_rule_firings)
+        self.assertFalse(wfc.debug_track_weight_changes)
 
         # Test 2 (verbose) preset: rich summaries, timing, and entropy snapshots
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
@@ -1054,6 +1121,8 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertTrue(wfc.debug_track_entropy_metrics)
         self.assertFalse(wfc.debug_store_option_distributions)
         self.assertFalse(wfc.debug_store_full_entropy_maps)
+        self.assertFalse(wfc.debug_track_rule_firings)
+        self.assertFalse(wfc.debug_track_weight_changes)
 
         # Test 3 (max diagnostics) preset: highest level should turn everything on
         wfc_settings = make_wfc_settings_from_global_dist(base_settings.copy())
@@ -1069,6 +1138,8 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
         self.assertTrue(wfc.debug_track_entropy_metrics)
         self.assertTrue(wfc.debug_store_option_distributions)
         self.assertTrue(wfc.debug_store_full_entropy_maps)
+        self.assertTrue(wfc.debug_track_rule_firings)
+        self.assertTrue(wfc.debug_track_weight_changes)
 
     def test_wfc_debug_level_explicit_flags_override_presets(self):
         """Verify explicit flags override preset defaults."""
