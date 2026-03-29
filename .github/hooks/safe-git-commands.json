@@ -1,0 +1,22 @@
+{
+  "hooks": {},
+  "id": "dreamatlas-safe-git-tools",
+  "name": "Safe Git & File Exploration",
+  "description": "Whitelist read-only git and file commands; block write operations",
+  "event": "PreToolUse",
+  "condition": "tool.name == 'run_in_terminal'",
+  "rules": [
+    {
+      "pattern": "(?:^|&&|\\|\\||;|\\|)\\s*(?:git\\s+(?:add|commit|push|pull|fetch|merge|rebase|reset|checkout|clean|rm|mv|restore|switch|cherry-pick|revert)\\b|git\\s+branch\\s+-[dD]\\b|git\\s+tag\\s+-d\\b|rm\\b|mv\\b|cp\\b|mkdir\\b|touch\\b|chmod\\b|chown\\b|xargs\\s+(?:-[^\\s]+\\s+)*(?:rm|mv|cp|chmod|chown)\\b)",
+      "action": "block",
+      "reason": "Write operations are blocked even if they appear later in a chained command.",
+      "suggestion": "Ask user to confirm before running write operations"
+    },
+    {
+      "pattern": "^\\s*(?:cd\\s+[^;&|]+|source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+|git\\s+(?:status|diff|show|log|branch|tag|remote|config|rev-parse|hash-object|blame|ls-tree|cat-file|describe|reflog)(?:\\s+[^;&|]+)?|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|grep(?:\\s+[^;&|]+)?|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|pwd|echo\\s+\\$[A-Za-z_][A-Za-z0-9_]*)(?:\\s*&&\\s*(?:cd\\s+[^;&|]+|source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+|git\\s+(?:status|diff|show|log|branch|tag|remote|config|rev-parse|hash-object|blame|ls-tree|cat-file|describe|reflog)(?:\\s+[^;&|]+)?|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|grep(?:\\s+[^;&|]+)?|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|pwd|echo\\s+\\$[A-Za-z_][A-Za-z0-9_]*))*\\s*$",
+      "action": "allow",
+      "reason": "Only fully whitelisted read-only command chains are allowed."
+    }
+  ],
+  "fallback": "default"
+}
