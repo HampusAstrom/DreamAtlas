@@ -177,17 +177,18 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 - **Blocked by**: B.2.2
 
 ### B.3 WFC Debug & Entropy Tracking Framework
-- **Status**: In progress
+- **Status**: Completed
 - **Skill**: Developer
 - **Description**: Tools to visualize WFC state evolution and diagnose generation problems
 - **Action items**:
   - [x] Extend WFC with state snapshots at key iterations
   - [x] Create entropy metrics tracker (per element, per terrain type)
-  - [ ] Build visualization for intermediate maps (images/checkpoints)
+  - [x] Build visualization for intermediate maps (images/checkpoints)
   - [x] Create comparison tools (iteration N vs N+K)
   - [x] Add logging: option distribution, weight changes, rule firings
     Implemented: selected-element option-distribution logging, full per-step entropy surface logging, and per-step rule-firing/adjusting-weight deltas behind debug flags.
   - Iteration comparison tool available via `WaveFunctionCollapse.compare_debug_iteration_snapshots(step_a, step_b)`.
+- Checkpoint visualization implemented in `try_wave_function_collapse.py` via `render_checkpoint_maps(...)` using captured per-step checkpoint states, with unset provinces and borders rendered by entropy and support for separate, grid, or animation playback.
 - **Deliverables**:
   - Entropy time-series data during/after generation
   - Checkpoint images for visual debugging

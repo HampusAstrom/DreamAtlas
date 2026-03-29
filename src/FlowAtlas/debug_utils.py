@@ -147,6 +147,7 @@ class DebugStatisticsCollector:
         store_full_entropy_maps: bool = False,
         track_rule_firings: bool = False,
         track_weight_changes: bool = False,
+        store_checkpoint_states: bool = False,
     ):
         """
         Initialize collector for a specific generation run.
@@ -166,6 +167,7 @@ class DebugStatisticsCollector:
         self.store_full_entropy_maps = store_full_entropy_maps
         self.track_rule_firings = track_rule_firings
         self.track_weight_changes = track_weight_changes
+        self.store_checkpoint_states = store_checkpoint_states
         self.stats = self._make_empty_stats()
 
     def _make_empty_stats(self) -> dict:
@@ -190,6 +192,7 @@ class DebugStatisticsCollector:
             'weight_change_history': [],
             'entropy_surfaces': [],
             'iteration_snapshots': [],
+            'checkpoint_states': [],
             'progress': [],
             'progress_windows': [],
             'window_state': {
@@ -346,6 +349,13 @@ class DebugStatisticsCollector:
             self.stats['weight_change_history'].append({
                 'step': self.stats['steps'],
                 'changes': weight_changes,
+            })
+
+        checkpoint_state = step_info.get('checkpoint_state')
+        if self.store_checkpoint_states and isinstance(checkpoint_state, dict):
+            self.stats['checkpoint_states'].append({
+                'step': self.stats['steps'],
+                **checkpoint_state,
             })
 
         # Track per-rule importance and weighted counts
@@ -830,6 +840,7 @@ class DebugReportFormatter:
             f"entropy_surfaces={len(stats.get('entropy_surfaces', []))}",
             f"rule_firing_samples={len(stats.get('rule_firing_history', []))}",
             f"weight_change_samples={len(stats.get('weight_change_history', []))}",
+            f"checkpoint_state_samples={len(stats.get('checkpoint_states', []))}",
         ]
 
         latest_entropy = stats.get('latest_entropy', {})

@@ -437,6 +437,11 @@ class WaveFunctionCollapse:
             rule_diag_after = self._collect_rule_state_for_debug()
             rule_diagnostics = self._summarize_rule_state_deltas(rule_diag_before, rule_diag_after)
 
+        checkpoint_state = None
+        if self.debug_store_checkpoint_states:
+            post_entropy = self._collect_entropy_metrics_from_unset_elements()
+            checkpoint_state = self._collect_checkpoint_state(post_entropy)
+
         step_info = {
             'element_kind': element_kind,
             'selected_terrain': terrain,
@@ -454,6 +459,9 @@ class WaveFunctionCollapse:
 
         if rule_diagnostics is not None:
             step_info['rule_diagnostics'] = rule_diagnostics
+
+        if checkpoint_state is not None:
+            step_info['checkpoint_state'] = checkpoint_state
 
         return step_info
 
@@ -517,15 +525,21 @@ class WaveFunctionCollapse:
         all_entropies = {}
         province_entropies = {}
         border_entropies = {}
+        all_entropies_by_id = {}
+        province_entropies_by_id = {}
+        border_entropies_by_id = {}
 
         for element in self.graph.get_unset_elements():
             element_id = self._element_debug_id(element)
             entropy = shannon_entropy(element['joint_prob_dist'])
             all_entropies[element_id] = entropy
+            all_entropies_by_id[element.element_id] = entropy
             if element.is_province:
                 province_entropies[element_id] = entropy
+                province_entropies_by_id[element.element_id] = entropy
             else:
                 border_entropies[element_id] = entropy
+                border_entropies_by_id[element.element_id] = entropy
 
         def _summary(values: dict) -> dict:
             if not values:
@@ -548,6 +562,9 @@ class WaveFunctionCollapse:
             'all': all_entropies,
             'province': province_entropies,
             'border': border_entropies,
+            'all_by_element_id': all_entropies_by_id,
+            'province_by_element_id': province_entropies_by_id,
+            'border_by_element_id': border_entropies_by_id,
             'summary': {
                 'all': _summary(all_entropies),
                 'province': _summary(province_entropies),
@@ -580,6 +597,35 @@ class WaveFunctionCollapse:
             snapshot[manager.name] = manager_state
 
         return snapshot
+
+    def _collect_checkpoint_state(self, entropy_metrics: dict) -> dict:
+        """Capture a full step checkpoint for visualization of partial maps."""
+        province_terrain = {}
+        border_terrain = {}
+        for element in self.graph.get_all_elements():
+            terrain = element.get('terrain', None)
+            if terrain is None:
+                continue
+            if element.is_province:
+                province_terrain[element.element_id] = terrain
+            else:
+                border_terrain[element.element_id] = terrain
+
+        province_entropy = {
+            element_id: entropy
+            for element_id, entropy in entropy_metrics.get('province_by_element_id', {}).items()
+        }
+        border_entropy = {
+            element_id: entropy
+            for element_id, entropy in entropy_metrics.get('border_by_element_id', {}).items()
+        }
+
+        return {
+            'province_terrain': province_terrain,
+            'border_terrain': border_terrain,
+            'province_entropy': province_entropy,
+            'border_entropy': border_entropy,
+        }
 
     def _summarize_rule_state_deltas(self, before: dict, after: dict) -> dict:
         """Build step-level rule diagnostics from state before/after assignment."""
@@ -659,6 +705,7 @@ class WaveFunctionCollapse:
                 'debug_wfc_store_full_entropy_maps': False,
                 'debug_wfc_track_rule_firings': False,
                 'debug_wfc_track_weight_changes': False,
+                'debug_wfc_store_checkpoint_states': False,
             },
             1: {
                 'debug_wfc_statistics': True,
@@ -677,6 +724,7 @@ class WaveFunctionCollapse:
                 'debug_wfc_store_full_entropy_maps': True,
                 'debug_wfc_track_rule_firings': True,
                 'debug_wfc_track_weight_changes': True,
+                'debug_wfc_store_checkpoint_states': True,
             },
         }
 
@@ -705,6 +753,7 @@ class WaveFunctionCollapse:
         self.debug_store_full_entropy_maps = bool(self.settings.get('debug_wfc_store_full_entropy_maps', False))
         self.debug_track_rule_firings = bool(self.settings.get('debug_wfc_track_rule_firings', False))
         self.debug_track_weight_changes = bool(self.settings.get('debug_wfc_track_weight_changes', False))
+        self.debug_store_checkpoint_states = bool(self.settings.get('debug_wfc_store_checkpoint_states', False))
         self.debug_print_progress_report = bool(self.settings.get('debug_wfc_print_progress_report', False))
         self.debug_print_final_report = bool(self.settings.get('debug_wfc_print_final_report', False))
         self.debug_wfc_timing = bool(self.settings.get('debug_wfc_timing', False))
@@ -721,6 +770,7 @@ class WaveFunctionCollapse:
             store_full_entropy_maps=self.debug_store_full_entropy_maps,
             track_rule_firings=self.debug_track_rule_firings,
             track_weight_changes=self.debug_track_weight_changes,
+            store_checkpoint_states=self.debug_store_checkpoint_states,
         )
         self.debug_stats = self.debug_collector.stats
         self.debug_stats['enabled'] = self.debug_enabled
@@ -768,6 +818,13 @@ class WaveFunctionCollapse:
             raise RuntimeError("WFC debug statistics are disabled (set debug_wfc_statistics=True).")
 
         return self.debug_collector.compare_iteration_snapshots(step_a, step_b)
+
+    def get_debug_checkpoint_states(self) -> list[dict]:
+        """Return captured checkpoint states for partial-map visualization."""
+        if not self.debug_enabled:
+            raise RuntimeError("WFC debug statistics are disabled (set debug_wfc_statistics=True).")
+
+        return list(self.debug_stats.get('checkpoint_states', []))
 
 
 
