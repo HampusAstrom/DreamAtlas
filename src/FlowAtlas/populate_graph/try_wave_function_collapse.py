@@ -20,6 +20,8 @@ from FlowAtlas.try_voronoi_creation import gen_grid, spread_points, voronoi_and_
 
 # Current default rules and distributions live in rules_library.py.
 wfc_settings = make_default_wfc_settings()
+# Use initial per-class entropy baseline normalization when comparing provinces and borders.
+wfc_settings['entropy_selection_mode'] = 'normalized_initial_mean'
 
 # Border render mode options:
 # - 'center': draw graph borders as center-to-center connections

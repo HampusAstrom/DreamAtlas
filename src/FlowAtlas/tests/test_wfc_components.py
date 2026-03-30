@@ -11,9 +11,14 @@ Test coverage:
 """
 
 import unittest
+from unittest.mock import patch
 import networkx as nx
 from FlowAtlas.populate_graph.terrain_graph import Element, TerrainGraph
-from FlowAtlas.populate_graph.wave_function_collapse import WaveFunctionCollapse, collect_global_metrics, update_joint_probability_distribution
+from FlowAtlas.populate_graph.wave_function_collapse import (
+    WaveFunctionCollapse,
+    collect_global_metrics,
+    update_joint_probability_distribution,
+)
 from FlowAtlas.populate_graph.rule_management import BanRule, DistRule, RuleManager
 from FlowAtlas.populate_graph.wave_function_collapse import make_wfc_settings_from_global_dist
 from FlowAtlas.populate_graph.rules_library import make_default_wfc_settings
@@ -692,6 +697,13 @@ class TestBanRuleBehavior(unittest.TestCase):
 class TestWaveFunctionCollapseIntegration(unittest.TestCase):
     """Integration tests for full WFC loop with rules and constraints."""
 
+    def _build_selection_wfc(self, graph: TerrainGraph, mode: str) -> WaveFunctionCollapse:
+        wfc = WaveFunctionCollapse.__new__(WaveFunctionCollapse)
+        wfc.graph = graph
+        wfc.settings = {'entropy_selection_mode': mode}
+        wfc._entropy_norm_factors = wfc._build_entropy_norm_factors()
+        return wfc
+
     def test_banrule_respected_in_full_collapse(self):
         """
         Integration test: BanRule constraints are respected throughout full WFC collapse.
@@ -775,6 +787,151 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
 
         # Verify is_all_set returns True
         self.assertTrue(result.is_all_set(), "Graph should report all elements set after collapse")
+
+    def test_cross_domain_raw_entropy_prefers_borders(self):
+        """Raw entropy comparison prefers borders when border domain has fewer terrains."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B"])
+        graph.add_edge("A", "B")
+
+        graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('plains', 'forest', 'swamp', 'waste'),
+                'border_terrains': ('normal', 'river'),
+            }
+        }
+
+        province_a = Element.from_node("A", graph)
+        province_b = Element.from_node("B", graph)
+        border = Element.from_edge(("A", "B"), graph)
+
+        province_uniform = {'plains': 0.25, 'forest': 0.25, 'swamp': 0.25, 'waste': 0.25}
+        border_uniform = {'normal': 0.5, 'river': 0.5}
+        province_a['joint_prob_dist'] = dict(province_uniform)
+        province_b['joint_prob_dist'] = dict(province_uniform)
+        border['joint_prob_dist'] = dict(border_uniform)
+
+        wfc = self._build_selection_wfc(graph, mode='raw')
+        province_score = wfc._selection_entropy(province_a)
+        border_score = wfc._selection_entropy(border)
+        self.assertGreater(province_score, border_score)
+
+        with patch('numpy.random.choice', return_value=0):
+            selected = wfc.select_element_to_set()
+
+        self.assertTrue(selected.is_border)
+
+    def test_cross_domain_normalized_entropy_treats_uniform_domains_equally(self):
+        """Normalized entropy removes baseline bias between different domain sizes."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B"])
+        graph.add_edge("A", "B")
+
+        graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('plains', 'forest', 'swamp', 'waste'),
+                'border_terrains': ('normal', 'river'),
+            }
+        }
+
+        province_a = Element.from_node("A", graph)
+        province_b = Element.from_node("B", graph)
+        border = Element.from_edge(("A", "B"), graph)
+
+        province_uniform = {'plains': 0.25, 'forest': 0.25, 'swamp': 0.25, 'waste': 0.25}
+        border_uniform = {'normal': 0.5, 'river': 0.5}
+        province_a['joint_prob_dist'] = dict(province_uniform)
+        province_b['joint_prob_dist'] = dict(province_uniform)
+        border['joint_prob_dist'] = dict(border_uniform)
+
+        wfc = self._build_selection_wfc(graph, mode='normalized_domain_max')
+        province_score = wfc._selection_entropy(province_a)
+        border_score = wfc._selection_entropy(border)
+        self.assertAlmostEqual(province_score, 1.0)
+        self.assertAlmostEqual(border_score, 1.0)
+        self.assertAlmostEqual(province_score, border_score)
+
+        # On exact tie, candidate pool includes both provinces and borders.
+        # With deterministic random index 0, first unset element is the first node.
+        with patch('numpy.random.choice', return_value=0):
+            selected = wfc.select_element_to_set()
+
+        self.assertTrue(selected.is_province)
+
+    def test_cross_domain_normalized_initial_mean_uses_class_baselines(self):
+        """Initial-mean normalization can favor provinces even when their raw entropy is higher."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B"])
+        graph.add_edge("A", "B")
+
+        graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('plains', 'forest', 'swamp', 'waste'),
+                'border_terrains': ('normal', 'river'),
+            },
+            'initial_entropy_baseline': {
+                'province': {'mean': 1.8, 'median': 1.8},
+                'border': {'mean': 0.9, 'median': 0.9},
+            },
+        }
+
+        province_a = Element.from_node("A", graph)
+        province_b = Element.from_node("B", graph)
+        border = Element.from_edge(("A", "B"), graph)
+
+        # Province has higher raw entropy but lower normalized score vs border baseline.
+        province_dist = {'plains': 0.7, 'forest': 0.1, 'swamp': 0.1, 'waste': 0.1}
+        border_dist = {'normal': 0.7, 'river': 0.3}
+        province_a['joint_prob_dist'] = dict(province_dist)
+        province_b['joint_prob_dist'] = dict(province_dist)
+        border['joint_prob_dist'] = dict(border_dist)
+
+        wfc_raw = self._build_selection_wfc(graph, mode='raw')
+        province_raw = wfc_raw._selection_entropy(province_a)
+        border_raw = wfc_raw._selection_entropy(border)
+        self.assertGreater(province_raw, border_raw)
+
+        wfc = self._build_selection_wfc(graph, mode='normalized_initial_mean')
+        province_score = wfc._selection_entropy(province_a)
+        border_score = wfc._selection_entropy(border)
+        self.assertLess(province_score, border_score)
+
+        with patch('numpy.random.choice', return_value=0):
+            selected = wfc.select_element_to_set()
+
+        self.assertTrue(selected.is_province)
+
+    def test_cross_domain_normalized_initial_median_uses_class_baselines(self):
+        """Initial-median normalization uses stored class medians."""
+        graph = TerrainGraph(settings={})
+        graph.add_nodes_from(["A", "B"])
+        graph.add_edge("A", "B")
+
+        graph.global_metrics = {
+            'terrain_domain': {
+                'province_terrains': ('plains', 'forest', 'swamp', 'waste'),
+                'border_terrains': ('normal', 'river'),
+            },
+            'initial_entropy_baseline': {
+                'province': {'mean': 1.8, 'median': 1.6},
+                'border': {'mean': 0.9, 'median': 0.8},
+            },
+        }
+
+        province_a = Element.from_node("A", graph)
+        province_b = Element.from_node("B", graph)
+        border = Element.from_edge(("A", "B"), graph)
+
+        province_dist = {'plains': 0.7, 'forest': 0.1, 'swamp': 0.1, 'waste': 0.1}
+        border_dist = {'normal': 0.7, 'river': 0.3}
+        province_a['joint_prob_dist'] = dict(province_dist)
+        province_b['joint_prob_dist'] = dict(province_dist)
+        border['joint_prob_dist'] = dict(border_dist)
+
+        wfc = self._build_selection_wfc(graph, mode='normalized_initial_median')
+        province_score = wfc._selection_entropy(province_a)
+        border_score = wfc._selection_entropy(border)
+        self.assertLess(province_score, border_score)
 
     def test_wfc_debug_statistics_tracks_progress_timing_and_final_distribution(self):
         """Debug mode should expose per-step progress/timing and post-run distribution metrics."""

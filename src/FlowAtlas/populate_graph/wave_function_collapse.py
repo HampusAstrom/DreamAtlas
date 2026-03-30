@@ -214,30 +214,41 @@ def shannon_entropy(prob_dist: dict):
     return entropy
 
 
-def select_element_to_set(graph: TerrainGraph) -> Element:
-    # select the next element (province or border) to set based on entropy and other factors
+def _max_entropy_for_domain_size(domain_size: int) -> float:
+    """Return theoretical max entropy for a uniform categorical domain."""
+    if domain_size <= 1:
+        return 0.0
+    return float(np.log(domain_size))
 
-    # check entropy of unset elements and select the one with lowest entropy,
-    # as determined by its joint probability distribution,
-    # with a random fallback (that should warn when triggered)
-    element_to_set = []
-    lowest_entropy = float('inf')
+
+def _compute_entropy_baselines_from_unset(graph: TerrainGraph) -> dict:
+    """Compute per-class entropy baselines from the current unset elements."""
+    province_entropies = []
+    border_entropies = []
 
     for element in graph.get_unset_elements():
         entropy = shannon_entropy(element['joint_prob_dist'])
+        if element.is_province:
+            province_entropies.append(entropy)
+        else:
+            border_entropies.append(entropy)
 
-        if entropy < lowest_entropy:
-            lowest_entropy = entropy
-            element_to_set = [element]
-        elif entropy == lowest_entropy:
-            element_to_set.append(element)
+    def _summaries(values: list[float]) -> dict:
+        if not values:
+            return {
+                'mean': 1.0,
+                'median': 1.0,
+            }
+        return {
+            'mean': float(np.mean(values)),
+            'median': float(np.median(values)),
+        }
 
-    if not element_to_set:
-        raise RuntimeError("No unset elements found, but should still be setting elements. Check logic.")
+    return {
+        'province': _summaries(province_entropies),
+        'border': _summaries(border_entropies),
+    }
 
-    # np.random.choice needs indices/integers, so pick by index
-    chosen_index = np.random.choice(len(element_to_set))
-    return element_to_set[chosen_index]
 
 def select_element_terrain(element: Element, graph: TerrainGraph):
     # select a terrain for the given element (province or border) based on probabilities and constraints
@@ -312,6 +323,8 @@ class WaveFunctionCollapse:
 
         # 9. ensure unset elements have fresh joint distributions
         self.refresh_joint_probabilities()
+        self.graph.global_metrics['initial_entropy_baseline'] = _compute_entropy_baselines_from_unset(self.graph)
+        self._entropy_norm_factors = self._build_entropy_norm_factors()
 
         if self.debug_enabled:
             self.debug_stats['initial_state'] = self.debug_collector.get_progress_state()
@@ -330,6 +343,72 @@ class WaveFunctionCollapse:
             return func
         else:
             return default_func
+
+    def _build_entropy_norm_factors(self) -> dict:
+        """Build fixed per-class entropy normalization factors for the full run."""
+        mode = self.settings.get('entropy_selection_mode', 'raw')
+
+        if mode == 'raw':
+            return {'province': 1.0, 'border': 1.0}
+
+        if mode in {'normalized_domain_max', 'normalized'}:
+            domain = self.graph.global_metrics.get('terrain_domain', {})
+            province_max = _max_entropy_for_domain_size(len(domain.get('province_terrains', ())))
+            border_max = _max_entropy_for_domain_size(len(domain.get('border_terrains', ())))
+            return {
+                'province': (1.0 / province_max) if province_max > 0.0 else 1.0,
+                'border': (1.0 / border_max) if border_max > 0.0 else 1.0,
+            }
+
+        if mode in {'normalized_initial_mean', 'normalized_initial_median'}:
+            baseline_source = self.graph.global_metrics.get('initial_entropy_baseline')
+            if not isinstance(baseline_source, dict):
+                raise RuntimeError(
+                    "Missing fixed initial entropy baseline in graph.global_metrics. "
+                    "Run WaveFunctionCollapse initialization first."
+                )
+
+            baseline_key = 'mean' if mode == 'normalized_initial_mean' else 'median'
+            province_base = float(baseline_source.get('province', {}).get(baseline_key, 1.0))
+            border_base = float(baseline_source.get('border', {}).get(baseline_key, 1.0))
+            return {
+                'province': (1.0 / province_base) if province_base > 0.0 else 1.0,
+                'border': (1.0 / border_base) if border_base > 0.0 else 1.0,
+            }
+
+        raise ValueError(
+            "Unknown entropy_selection_mode "
+            f"'{mode}'. "
+            "Expected one of: 'raw', 'normalized_domain_max', "
+            "'normalized_initial_mean', 'normalized_initial_median'."
+        )
+
+    def _selection_entropy(self, element: Element) -> float:
+        """Return entropy score used for selection and diagnostics."""
+        entropy = shannon_entropy(element['joint_prob_dist'])
+        class_key = 'province' if element.is_province else 'border'
+        factor = self._entropy_norm_factors.get(class_key, 1.0)
+        return entropy * factor
+
+    def select_element_to_set(self) -> Element:
+        """Select next unset element by lowest normalized entropy score."""
+        element_to_set = []
+        lowest_entropy = float('inf')
+
+        for element in self.graph.get_unset_elements():
+            entropy = self._selection_entropy(element)
+
+            if entropy < lowest_entropy:
+                lowest_entropy = entropy
+                element_to_set = [element]
+            elif entropy == lowest_entropy:
+                element_to_set.append(element)
+
+        if not element_to_set:
+            raise RuntimeError("No unset elements found, but should still be setting elements. Check logic.")
+
+        chosen_index = np.random.choice(len(element_to_set))
+        return element_to_set[chosen_index]
 
     def _snapshot_preset_terrains(self) -> list[tuple[Element, object]]:
         preset_assignments = []
@@ -404,7 +483,7 @@ class WaveFunctionCollapse:
 
     def step_wave_function_collapse(self, capture_debug_step: bool = False):
         # perform a single step of the wave function collapse process
-        element_to_set = select_element_to_set(self.graph)
+        element_to_set = self.select_element_to_set()
         if not capture_debug_step:
             terrain = select_element_terrain(element_to_set, self.graph)
             self.set_element_terrain(element_to_set, terrain)
@@ -424,7 +503,7 @@ class WaveFunctionCollapse:
 
         if entropy_diagnostics is not None:
             entropy_diagnostics['selected_element_id'] = selected_element_id
-            entropy_diagnostics['selected_entropy'] = shannon_entropy(element_to_set['joint_prob_dist'])
+            entropy_diagnostics['selected_entropy'] = self._selection_entropy(element_to_set)
 
         rule_diag_before = None
         if self.debug_track_rule_firings or self.debug_track_weight_changes:
@@ -531,7 +610,7 @@ class WaveFunctionCollapse:
 
         for element in self.graph.get_unset_elements():
             element_id = self._element_debug_id(element)
-            entropy = shannon_entropy(element['joint_prob_dist'])
+            entropy = self._selection_entropy(element)
             all_entropies[element_id] = entropy
             all_entropies_by_id[element.element_id] = entropy
             if element.is_province:

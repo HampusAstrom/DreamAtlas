@@ -5,6 +5,7 @@
 
 ## Maintenance Notes
 
+- 2026-03-30: B.1 implemented entropy-selection refactor for mixed element domains. Selection moved into `WaveFunctionCollapse` with fixed per-class normalization factors computed once at setup, using configurable `entropy_selection_mode` (`raw`, `normalized_domain_max`, `normalized_initial_mean`, `normalized_initial_median`). `try_wave_function_collapse.py` now defaults to `normalized_initial_mean`.
 - 2026-03-28: Hardened safe git hook launcher for cross-platform use by adding OS-specific hook commands and launcher scripts under `.github/hooks/`.
 - 2026-03-29: Simplified safe git hooks to a single direct Python entrypoint in `.github/hooks/00-safe-tool-permissions.json`; removed wrapper scripts to reduce VS Code hang risk and set hook infrastructure failures to fail-open in `.github/hooks/apply_safe_git_rules.py`.
 - 2026-03-29: Refactored `.github/hooks/safe-git-commands.json` into readable per-category allow rules; added safe auto-allow for `rg`, conda-activated `pytest`, and `git -c ... status`; tightened git safety by restricting `branch`/`tag`/`config` to read-only forms and explicitly blocking `ln` and other write-like shell commands.
@@ -111,18 +112,25 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 **Recommended Agent/Skill**: Developer + Code Smell Checker (diagnosis) + Planner
 
 ### B.1 Investigate & Fix Border-Before-Province Issue
-- **Status**: Not started
+- **Status**: In progress
 - **Skill**: Developer + Code Smell Checker (diagnosis)
 - **Description**: Current WFC places all borders before other provinces. Find root cause.
 - **Action items**:
-  - [ ] Analyze entropy distribution across iterations
-  - [ ] Check option availability at sequence points
-  - [ ] Compare border vs province option distributions
-  - [ ] Use debug framework (B.3) to visualize problem
-  - [ ] Implement fix based on findings
+  - [x] Analyze entropy distribution across iterations
+  - [x] Check option availability at sequence points
+  - [x] Compare border vs province option distributions
+  - [x] Use debug framework (B.3) to visualize problem
+  - [x] Implement quick structural fix for mixed-domain entropy comparison
+  - [ ] Evaluate whether fix remains needed after C.2/B.2/D-style local rules add stronger cross-domain pressure
+  - [ ] Benchmark generation behavior with and without normalization after local rules are introduced
 - **Outcome**: Organic border/province growth
 - **Blocked by**: B.3 (debugging helps diagnosis)
 - **Feeds into**: B.2
+- **Decisions implemented (2026-03-30)**:
+  - Selection now uses class-owned logic in `WaveFunctionCollapse.select_element_to_set()` instead of standalone helper functions.
+  - Fixed normalization constants are computed once at setup and reused for the full run (no per-step baseline recomputation).
+  - Baseline modes (`normalized_initial_mean`/`normalized_initial_median`) normalize by start-state class entropy instead of theoretical max, addressing skew from uneven target distributions.
+  - Tie handling reverted to strict comparison (no score-tolerance window) to avoid order-dependent minimum replacement.
 
 ### B.2 Geographic Rules/Bans and Constraints
 - **Status**: Not started
