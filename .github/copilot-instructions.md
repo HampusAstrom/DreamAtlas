@@ -96,11 +96,27 @@ print(DreamAtlasSettings)
 
 **Read-only commands are auto-approved** (no asking permission each time):
 - `git status`, `git diff`, `git show`, `git log`, `git branch`, `git remote`
-- `ls`, `find`, `cat`, `grep`, `wc`, `head`, `tail`, `stat`, `pwd`
+- `ls`, `find`, `cat`, `nl`, `grep`, `rg`, `wc`, `head`, `tail`, `stat`, `pwd`
+- Hardened tests only: `source ... && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest ...` targeting `src/DreamAtlas/tests/` or `src/FlowAtlas/tests/`
 
 **Write commands are BLOCKED** (require explicit approval in chat):
 - `git commit`, `git push`, `git pull`, `git checkout`
-- `rm`, `mv`, `cp` (file deletion/renaming)
+- `rm`, `mv`, `cp`, `ln`, `mkdir`, `touch`, `chmod`, `chown` (filesystem writes/permission changes)
+- Environment creation/setup commands like `python -m venv`, `virtualenv`, `uv venv`, `conda create`, `pipenv install/shell`, and `poetry env use/remove`
+
+**Pytest hardening policy (auto-approval requirements):**
+- Must start with conda activation for `dreamatlas2`
+- Must include `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`
+- Must target workspace tests under `src/DreamAtlas/tests/` or `src/FlowAtlas/tests/`
+- Must not use `-p` or `--pyargs`
+
+**Compliant test command examples:**
+```bash
+source C:/Users/Hampus/anaconda3/etc/profile.d/conda.sh && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q src/FlowAtlas/tests/
+source C:/Users/Hampus/anaconda3/etc/profile.d/conda.sh && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q src/DreamAtlas/tests/test_basic_functionality.py -k "smoke"
+```
+
+If a test command is blocked, rewrite it to the hardened format above and retry.
 
 If I try to run a write command, you'll see a clear error. To run these, ask me explicitly: *"Run: git add ... && git commit -m ..."* or *"Delete the file X"*
 
@@ -139,7 +155,9 @@ This prevents accidental commits/pushes while keeping exploration fast.
 
 **Planner Agent**: Update NEXT_STEPS.md frequently. Check current status, suggest next items.
 
-**QA/Test Agent**: Run tests with conda activation: `pytest`, `pytest -m "not slow"`.
+**QA/Test Agent**: Run hardened tests only:
+- `source C:/Users/Hampus/anaconda3/etc/profile.d/conda.sh && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q src/FlowAtlas/tests/`
+- `source C:/Users/Hampus/anaconda3/etc/profile.d/conda.sh && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q src/DreamAtlas/tests/`
 
 **Researcher Agent**: Explore codebase, check external docs, validate design against existing patterns.
 

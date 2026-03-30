@@ -1,12 +1,15 @@
 # FlowAtlas Development Roadmap
 
 **Current Status**: Planning Phase
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-03-30
 
 ## Maintenance Notes
 
 - 2026-03-28: Hardened safe git hook launcher for cross-platform use by adding OS-specific hook commands and launcher scripts under `.github/hooks/`.
 - 2026-03-29: Simplified safe git hooks to a single direct Python entrypoint in `.github/hooks/00-safe-tool-permissions.json`; removed wrapper scripts to reduce VS Code hang risk and set hook infrastructure failures to fail-open in `.github/hooks/apply_safe_git_rules.py`.
+- 2026-03-29: Refactored `.github/hooks/safe-git-commands.json` into readable per-category allow rules; added safe auto-allow for `rg`, conda-activated `pytest`, and `git -c ... status`; tightened git safety by restricting `branch`/`tag`/`config` to read-only forms and explicitly blocking `ln` and other write-like shell commands.
+- 2026-03-30: Upgraded to hardened-balanced pytest policy in `.github/hooks/safe-git-commands.json`: auto-allow only conda-activated test runs with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, workspace test targets, and no `-p`/`--pyargs`; non-compliant pytest commands are now blocked with an explicit compliant-command suggestion.
+- 2026-03-30: Reordered hook policy intent to deny-first evaluation (including non-compliant pytest) before allows; added `nl` to read-only auto-allow and explicitly blocked common terminal virtual-environment creation commands (`python -m venv`, `virtualenv`, `uv venv`, `conda create`, `pipenv`, `poetry env use/remove`).
 
 ---
 

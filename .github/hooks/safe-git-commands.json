@@ -7,15 +7,51 @@
   "condition": "tool.name == 'run_in_terminal'",
   "rules": [
     {
-      "pattern": "(?:^|&&|\\|\\||;|\\|)\\s*(?:git\\s+(?:add|commit|push|pull|fetch|merge|rebase|reset|checkout|clean|rm|mv|restore|switch|cherry-pick|revert)\\b|git\\s+branch\\s+-[dD]\\b|git\\s+tag\\s+-d\\b|rm\\b|mv\\b|cp\\b|mkdir\\b|touch\\b|chmod\\b|chown\\b|xargs\\s+(?:-[^\\s]+\\s+)*(?:rm|mv|cp|chmod|chown)\\b)",
+      "pattern": "(?:^|&&|\\|\\||;|\\|)\\s*(?:git\\s+(?:add|commit|push|pull|fetch|merge|rebase|reset|checkout|clean|rm|mv|restore|switch|cherry-pick|revert)\\b|git\\s+branch\\s+-[dDmM]\\b|git\\s+tag\\s+-d\\b|rm\\b|mv\\b|cp\\b|mkdir\\b|touch\\b|chmod\\b|chown\\b|ln\\b|install\\b|truncate\\b|dd\\b|sed\\s+-i\\b|perl\\s+-i\\b|(?:python|python3|py(?:\\s+-[0-9.]+)?)\\s+-m\\s+venv\\b|(?:python|python3|py(?:\\s+-[0-9.]+)?)\\s+-m\\s+virtualenv\\b|virtualenv\\b|mkvirtualenv\\b|uv\\s+venv\\b|pipenv\\s+(?:install|shell|sync|lock)\\b|poetry\\s+env\\s+(?:use|remove)\\b|conda\\s+create\\b|xargs\\s+(?:-[^\\s]+\\s+)*(?:rm|mv|cp|chmod|chown|ln|install|truncate)\\b)",
       "action": "block",
       "reason": "Write operations are blocked even if they appear later in a chained command.",
       "suggestion": "Ask user to confirm before running write operations"
     },
     {
-      "pattern": "^\\s*(?:cd\\s+[^;&|]+|source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+|git\\s+(?:status|diff|show|log|branch|tag|remote|config|rev-parse|hash-object|blame|ls-tree|cat-file|describe|reflog)(?:\\s+[^;&|]+)?|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|grep(?:\\s+[^;&|]+)?|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|pwd|echo\\s+\\$[A-Za-z_][A-Za-z0-9_]*)(?:\\s*&&\\s*(?:cd\\s+[^;&|]+|source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+|git\\s+(?:status|diff|show|log|branch|tag|remote|config|rev-parse|hash-object|blame|ls-tree|cat-file|describe|reflog)(?:\\s+[^;&|]+)?|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|grep(?:\\s+[^;&|]+)?|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|pwd|echo\\s+\\$[A-Za-z_][A-Za-z0-9_]*))*\\s*$",
+      "pattern": "^(?!\\s*source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+\\s*&&\\s*PYTEST_DISABLE_PLUGIN_AUTOLOAD=1\\s+(?:pytest|python\\s+-m\\s+pytest)\\b(?=[^;&|]*(?:src/DreamAtlas/tests(?:/|\\b)|src/FlowAtlas/tests(?:/|\\b)))(?![^;&|]*\\s(?:-p|--pyargs)\\b)[^;&|]*\\s*$).*(?:^|&&)\\s*(?:source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+\\s*&&\\s*)?(?:PYTEST_DISABLE_PLUGIN_AUTOLOAD=1\\s+)?(?:pytest|python\\s+-m\\s+pytest)\\b",
+      "action": "block",
+      "reason": "Pytest is only auto-approved in hardened mode.",
+      "suggestion": "Use: source C:/Users/Hampus/anaconda3/etc/profile.d/conda.sh && conda activate dreamatlas2 && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q src/FlowAtlas/tests/ (or src/DreamAtlas/tests/). Avoid -p and --pyargs."
+    },
+    {
+      "pattern": "^\\s*source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+\\s*&&\\s*PYTEST_DISABLE_PLUGIN_AUTOLOAD=1\\s+(?:pytest|python\\s+-m\\s+pytest)\\b(?=[^;&|]*(?:src/DreamAtlas/tests(?:/|\\b)|src/FlowAtlas/tests(?:/|\\b)))(?![^;&|]*\\s(?:-p|--pyargs)\\b)[^;&|]*\\s*$",
       "action": "allow",
-      "reason": "Only fully whitelisted read-only command chains are allowed."
+      "reason": "Hardened pytest execution is allowed (conda + plugin autoload disabled + workspace test targets)."
+    },
+    {
+      "pattern": "^\\s*source\\s+[^;&|]+\\s*&&\\s*conda\\s+activate\\s+[^;&|]+\\s*$",
+      "action": "allow",
+      "reason": "Conda environment activation is allowed."
+    },
+    {
+      "pattern": "^\\s*(?:cd\\s+[^;&|]+|pwd|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|nl(?:\\s+[^;&|]+)?|grep(?:\\s+(?:\"[^\"]*\"|'[^']*'|[^;&|]+))*|rg(?:\\s+(?:\"[^\"]*\"|'[^']*'|[^;&|]+))*|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|echo(?:\\s+[^;&|]+)?)(?:\\s*&&\\s*(?:cd\\s+[^;&|]+|pwd|ls(?:\\s+[^;&|]+)?|find(?:\\s+[^;&|]+)?|cat(?:\\s+[^;&|]+)?|nl(?:\\s+[^;&|]+)?|grep(?:\\s+(?:\"[^\"]*\"|'[^']*'|[^;&|]+))*|rg(?:\\s+(?:\"[^\"]*\"|'[^']*'|[^;&|]+))*|wc(?:\\s+[^;&|]+)?|head(?:\\s+[^;&|]+)?|tail(?:\\s+[^;&|]+)?|stat(?:\\s+[^;&|]+)?|file(?:\\s+[^;&|]+)?|echo(?:\\s+[^;&|]+)?))*\\s*$",
+      "action": "allow",
+      "reason": "Only read-only shell exploration commands are present."
+    },
+    {
+      "pattern": "^\\s*git(?:\\s+-c\\s+[^;&|]+)*\\s+(?:status|diff|show|log|remote|rev-parse|hash-object|blame|ls-tree|cat-file|describe|reflog)(?:\\s+[^;&|]+)?\\s*$",
+      "action": "allow",
+      "reason": "Read-only git inspection command is allowed."
+    },
+    {
+      "pattern": "^\\s*git(?:\\s+-c\\s+[^;&|]+)*\\s+branch(?:\\s+(?:--all|-a|--remotes|-r|--verbose|-v|--vv|--show-current|--list(?:\\s+[^;&|]+)?))?\\s*$",
+      "action": "allow",
+      "reason": "Read-only git branch listing is allowed."
+    },
+    {
+      "pattern": "^\\s*git(?:\\s+-c\\s+[^;&|]+)*\\s+tag(?:\\s+(?:--list(?:\\s+[^;&|]+)?|-l(?:\\s+[^;&|]+)?))?\\s*$",
+      "action": "allow",
+      "reason": "Read-only git tag listing is allowed."
+    },
+    {
+      "pattern": "^\\s*git(?:\\s+-c\\s+[^;&|]+)*\\s+config\\s+(?:--get|--get-all|--list|--show-origin|--show-scope)(?:\\s+[^;&|]+)*\\s*$",
+      "action": "allow",
+      "reason": "Read-only git config queries are allowed."
     }
   ],
   "fallback": "default"
