@@ -1,7 +1,5 @@
 from typing import Literal, Optional, Callable, TypeAlias
 from abc import ABC, abstractmethod
-from collections import Counter
-
 from .terrain_graph import Element, TerrainGraph
 
 RangeType: TypeAlias = Literal['topology', 'geography']
@@ -212,6 +210,7 @@ class DistRule(Rule):
                  adjusting_border_dist: dict,
                  adjusting_factor: float = 1.0,
                  flag: str = 'all',
+                 dynamic_adjustment_schedule: Optional[dict] = None,
                  # TODO consider if flags should be dict, so we can store distance weights there,
                  # or if we should just have a separate dict for distance weights in that case
                  name: Optional[str] = None):
@@ -221,17 +220,22 @@ class DistRule(Rule):
         # Immutable targets used to recompute adjusting dists as assignments accumulate.
         self.target_province_dist = adjusting_province_dist.copy()
         self.target_border_dist = adjusting_border_dist.copy()
+        if not 0.0 <= adjusting_factor <= 1.0:
+            raise ValueError("adjusting_factor must be between 0.0 and 1.0 inclusive")
         self.adjusting_factor = adjusting_factor # 1.0 for guarranteed dist match, 0.0 for fixed dist selection
         self.flag = flag # defaults to all if not specified, meaning it applies to all elements
+        self.dynamic_adjustment_schedule = self._validate_dynamic_adjustment_schedule(dynamic_adjustment_schedule)
         self.name = name
         self.rule_key = name or f"{self.__class__.__name__}_{id(self)}"
 
         # metrics to keep track of
         # TODO later we might want these to be weighted when local dists have uneven impact
-        self.total_rule_provinces = 0.0
-        self.total_rule_borders = 0.0
-        self.assigned_province_attributes = Counter()
-        self.assigned_border_attributes = Counter()
+        self.total_rule_province_weight = 0.0
+        self.total_rule_border_weight = 0.0
+        self.assigned_rule_province_weight = 0.0
+        self.assigned_rule_border_weight = 0.0
+        self.assigned_province_attributes: dict = {}
+        self.assigned_border_attributes: dict = {}
 
         # TODO handle weight by distance for for cap "region" type stuff
         # weight: float = 1.0 # hmm, maybe just rely on RuleManager weight?
@@ -239,6 +243,132 @@ class DistRule(Rule):
         # range: float = 0.0
         # range_type: Literal['topology', 'geography'] = 'topology'
         # range_check: Literal['eq','leq'] = 'eq' # just these for now, expand if needed
+
+    @staticmethod
+    def _validate_dynamic_adjustment_schedule(schedule: Optional[dict]) -> Optional[dict]:
+        if schedule is None:
+            return None
+        if not isinstance(schedule, dict):
+            raise ValueError("dynamic_adjustment_schedule must be a dict when provided")
+
+        required_keys = {'curve', 'start_multiplier', 'end_multiplier'}
+        missing_keys = required_keys - set(schedule.keys())
+        if missing_keys:
+            raise ValueError(
+                "dynamic_adjustment_schedule is missing required keys: "
+                f"{sorted(missing_keys)}"
+            )
+
+        curve = schedule['curve']
+        if curve not in {'linear', 'ease_in'}:
+            raise ValueError(
+                "dynamic_adjustment_schedule curve must be 'linear' or 'ease_in'"
+            )
+
+        start_multiplier = float(schedule['start_multiplier'])
+        end_multiplier = float(schedule['end_multiplier'])
+        exponent = None
+        if curve == 'ease_in':
+            if 'exponent' not in schedule:
+                raise ValueError(
+                    "dynamic_adjustment_schedule with curve='ease_in' must include 'exponent'"
+                )
+            exponent = float(schedule['exponent'])
+
+        if start_multiplier < 0.0:
+            raise ValueError("dynamic_adjustment_schedule start_multiplier must be >= 0.0")
+        if end_multiplier < 0.0:
+            raise ValueError("dynamic_adjustment_schedule end_multiplier must be >= 0.0")
+        if start_multiplier > 1.0:
+            raise ValueError("dynamic_adjustment_schedule start_multiplier must be <= 1.0")
+        if end_multiplier < 1.0:
+            raise ValueError("dynamic_adjustment_schedule end_multiplier must be >= 1.0")
+        if exponent is not None and exponent <= 0.0:
+            raise ValueError("dynamic_adjustment_schedule exponent must be > 0.0")
+
+        validated_schedule = {
+            'curve': curve,
+            'start_multiplier': start_multiplier,
+            'end_multiplier': end_multiplier,
+        }
+        if exponent is not None:
+            validated_schedule['exponent'] = exponent
+
+        return validated_schedule
+
+    def _get_element_flag_weight(self, element: Element) -> float:
+        assert 'flags' in element, f"Element {element} is missing flags for DistRule '{self.rule_key}'"
+        assert isinstance(element['flags'], dict), (
+            f"Element {element} flags must be a dict for DistRule '{self.rule_key}'"
+        )
+        assert self.flag in element['flags'], (
+            f"Element {element} is missing flag '{self.flag}' for DistRule '{self.rule_key}'"
+        )
+
+        flag_weight = float(element['flags'][self.flag])
+        if flag_weight < 0.0:
+            raise ValueError(
+                f"DistRule '{self.rule_key}' requires non-negative flag weights, got {flag_weight}"
+            )
+        return flag_weight
+
+    def _get_dynamic_adjustment_multiplier(self,
+                                           element_kind: Literal['province', 'border'],
+                                           gap: float) -> float:
+        if self.dynamic_adjustment_schedule is None:
+            return 1.0
+
+        schedule = self.dynamic_adjustment_schedule
+        if element_kind == 'province':
+            total_weight = self.total_rule_province_weight
+            assigned_weight = self.assigned_rule_province_weight
+        else:
+            total_weight = self.total_rule_border_weight
+            assigned_weight = self.assigned_rule_border_weight
+
+        epsilon = 1e-9
+        if total_weight <= 0.0:
+            return 1.0
+        if assigned_weight < -epsilon:
+            raise RuntimeError(
+                f"DistRule '{self.rule_key}' has invalid assigned weight state for {element_kind}: "
+                f"assigned={assigned_weight}, total={total_weight}"
+            )
+        if assigned_weight < 0.0:
+            assigned_weight = 0.0
+        if assigned_weight > total_weight:
+            if assigned_weight - total_weight <= epsilon:
+                assigned_weight = total_weight
+            else:
+                raise RuntimeError(
+                    f"DistRule '{self.rule_key}' has invalid assigned weight state for {element_kind}: "
+                    f"assigned={assigned_weight}, total={total_weight}"
+                )
+
+        if abs(gap) <= epsilon:
+            return 1.0
+
+        remaining_weight = total_weight - assigned_weight
+        if remaining_weight < 0.0:
+            if abs(remaining_weight) <= epsilon:
+                remaining_weight = 0.0
+            else:
+                raise RuntimeError(
+                    f"DistRule '{self.rule_key}' has invalid remaining weight state for {element_kind}: "
+                    f"remaining={remaining_weight}, assigned={assigned_weight}, total={total_weight}"
+                )
+
+        if remaining_weight <= epsilon:
+            urgency = 1.0
+        else:
+            urgency = min(abs(gap) / remaining_weight, 1.0)
+
+        if schedule['curve'] == 'ease_in':
+            urgency = urgency ** schedule['exponent']
+
+        if gap > 0.0:
+            return 1.0 + ((schedule['end_multiplier'] - 1.0) * urgency)
+        return 1.0 - ((1.0 - schedule['start_multiplier']) * urgency)
 
     def setup(self, graph: TerrainGraph):
         if self.flag == 'all':
@@ -258,12 +388,12 @@ class DistRule(Rule):
                     raise ValueError(f"Element {element} has non-dict flags, cannot add 'all' flag for DistRule setup")
 
                 # gather starting metrics
-                is_node = element.is_node
+                element_flag_weight = self._get_element_flag_weight(element)
                 # TODO when non-1.0 flags the total should be the sum of total flag weights
-                if is_node:
-                    self.total_rule_provinces += 1.0
+                if element.is_node:
+                    self.total_rule_province_weight += element_flag_weight
                 else:
-                    self.total_rule_borders += 1.0
+                    self.total_rule_border_weight += element_flag_weight
 
                     # TODO we might want to handle all (already set metrics by just
                     # collecting all assigned elements) in RuleManager and then let it
@@ -288,7 +418,7 @@ class DistRule(Rule):
         else:
             element['dists'][self.rule_key] = self.adjusting_border_dist
 
-        element_flag_weight = element['flags'][self.flag]
+        element_flag_weight = self._get_element_flag_weight(element)
         if element_flag_weight != 1.0:
             # TODO note on how to fix this later
             # if we change it so that in WFC a method is called for each rule manager
@@ -306,12 +436,12 @@ class DistRule(Rule):
         if element_kind == 'province':
             target_dist = self.target_province_dist
             assigned_counts = self.assigned_province_attributes
-            total_elements = self.total_rule_provinces
+            total_elements = self.total_rule_province_weight
             live_dist = self.adjusting_province_dist
         else:
             target_dist = self.target_border_dist
             assigned_counts = self.assigned_border_attributes
-            total_elements = self.total_rule_borders
+            total_elements = self.total_rule_border_weight
             live_dist = self.adjusting_border_dist
 
         if total_elements <= 0:
@@ -319,13 +449,20 @@ class DistRule(Rule):
 
         adjusting_dist = {}
         for terrain, target_component in target_dist.items():
-            current_count = assigned_counts.get(terrain, 0)
+            if terrain in assigned_counts:
+                current_count = assigned_counts[terrain]
+            else:
+                current_count = 0.0
             target_count = target_component * total_elements
             gap = target_count - current_count
             adjustment_part = self.adjusting_factor * (gap / total_elements)
             target_part = (1.0 - self.adjusting_factor) * target_component
             adjusted_factor = max(0.0, adjustment_part + target_part)
-            adjusting_dist[terrain] = adjusted_factor
+            schedule_multiplier = self._get_dynamic_adjustment_multiplier(
+                element_kind=element_kind,
+                gap=gap,
+            )
+            adjusting_dist[terrain] = max(0.0, adjusted_factor * schedule_multiplier)
 
         # OBS There should be no normalizing here! The adjusting dist is meant to
         # be a set of factors that are applied to the base global target dist,
@@ -351,12 +488,19 @@ class DistRule(Rule):
         if 'terrain' not in origin_element or origin_element['terrain'] is None:
             return
         terrain = origin_element['terrain']
+        element_flag_weight = self._get_element_flag_weight(origin_element)
 
         # Update assignment counters based on element type
         if origin_element.is_province:
-            self.assigned_province_attributes[terrain] += 1
+            if terrain not in self.assigned_province_attributes:
+                self.assigned_province_attributes[terrain] = 0.0
+            self.assigned_province_attributes[terrain] += element_flag_weight
+            self.assigned_rule_province_weight += element_flag_weight
         else:
-            self.assigned_border_attributes[terrain] += 1
+            if terrain not in self.assigned_border_attributes:
+                self.assigned_border_attributes[terrain] = 0.0
+            self.assigned_border_attributes[terrain] += element_flag_weight
+            self.assigned_rule_border_weight += element_flag_weight
 
         self._recompute_adjusting_dist('province')
         self._recompute_adjusting_dist('border')

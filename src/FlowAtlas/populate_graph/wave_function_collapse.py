@@ -970,10 +970,14 @@ def make_wfc_settings_from_global_dist(settings: dict, include_global_dist_rule:
     }
 
     existing_managers = settings.get('rule_managers', [])
+    dynamic_adjustment_schedule = None
+    if 'global_dist_dynamic_adjustment_schedule' in settings:
+        dynamic_adjustment_schedule = settings['global_dist_dynamic_adjustment_schedule']
     if include_global_dist_rule:
         global_rule = DistRule(
             adjusting_province_dist=adjusting_province_dist,
             adjusting_border_dist=adjusting_border_dist,
+            dynamic_adjustment_schedule=dynamic_adjustment_schedule,
             name='global_dist_rule',
         )
         global_manager = RuleManager(name='global_dist', rules=[global_rule])

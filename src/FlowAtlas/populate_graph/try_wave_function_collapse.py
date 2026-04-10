@@ -18,8 +18,19 @@ from FlowAtlas.try_voronoi_creation import gen_grid, spread_points, voronoi_and_
 # TODO consider what the actual default usage of WFC should look like, how should
 # the user or other code setup/define rules and target distributions for it?
 
+# Set to None to keep the previous behavior.
+# Example:
+# GLOBAL_DIST_DYNAMIC_ADJUSTMENT_SCHEDULE = {
+#     'curve': 'linear',
+#     'start_multiplier': 0.7,
+#     'end_multiplier': 1.4,
+# }
+GLOBAL_DIST_DYNAMIC_ADJUSTMENT_SCHEDULE = None
+
 # Current default rules and distributions live in rules_library.py.
-wfc_settings = make_default_wfc_settings()
+wfc_settings = make_default_wfc_settings(
+    global_dist_dynamic_adjustment_schedule=GLOBAL_DIST_DYNAMIC_ADJUSTMENT_SCHEDULE,
+)
 # Use initial per-class entropy baseline normalization when comparing provinces and borders.
 wfc_settings['entropy_selection_mode'] = 'normalized_initial_mean'
 

@@ -1,10 +1,12 @@
 # FlowAtlas Development Roadmap
 
 **Current Status**: Planning Phase
-**Last Updated**: 2026-03-30
+**Last Updated**: 2026-04-10
 
 ## Maintenance Notes
 
+- 2026-04-10: Started C.1 dynamic distance/weight adjustment over time. `DistRule` now owns its own dynamic-adjustment progress based on assigned rule weight instead of WFC-global progress, and `try_wave_function_collapse.py` exposes a `GLOBAL_DIST_DYNAMIC_ADJUSTMENT_SCHEDULE` toggle for experimentation.
+- 2026-04-10: `RuleManager.manager_weight` appears underused and may not match the intended user-facing control for scaling rule-set impact; revisit its semantics in a later pass before expanding rule-weight configuration.
 - 2026-03-30: B.1 implemented entropy-selection refactor for mixed element domains. Selection moved into `WaveFunctionCollapse` with fixed per-class normalization factors computed once at setup, using configurable `entropy_selection_mode` (`raw`, `normalized_domain_max`, `normalized_initial_mean`, `normalized_initial_median`). `try_wave_function_collapse.py` now defaults to `normalized_initial_mean`.
 - 2026-03-28: Hardened safe git hook launcher for cross-platform use by adding OS-specific hook commands and launcher scripts under `.github/hooks/`.
 - 2026-03-29: Simplified safe git hooks to a single direct Python entrypoint in `.github/hooks/00-safe-tool-permissions.json`; removed wrapper scripts to reduce VS Code hang risk and set hook infrastructure failures to fail-open in `.github/hooks/apply_safe_git_rules.py`.
@@ -26,13 +28,13 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 - [Development Strategy](#development-strategy--sequencing)
 
 **Current High Prio**
-1. B.1
-2. C.1
+1. [x] B.1
+2. [ ] C.1
 
 **Next features**
-- C.2, C.4
-- C.3 and D
-- A
+- [ ] C.2, [ ] C.4
+- [ ] C.3 and [ ] D
+- [ ] A
 
 ---
 
@@ -218,20 +220,24 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 **Recommended Agent/Skill**: Developer + Code Smell Checker + QA
 
 ### C.1 Dynamic Distance/Weight Adjustment Over Time
-- **Status**: Not started
+- **Status**: In progress
 - **Skill**: Developer
 - **Description**: Optionally adjust dist/weight dynamically based on progress
 - **Strategy**: Light touch early (many slots), harder near end (few options)
 - **Caution**: May introduce spatial bias with spatial seeding—test carefully
 - **Action items**:
-  - [ ] Design time-based weight curve
-  - [ ] Implement as optional mode (controlled by flag)
+  - [x] Design time-based weight curve
+  - [x] Implement as optional mode (controlled by flag)
   - [ ] Test for spatial bias with spatial seeding
   - [ ] Measure generation time and quality impact
   - [ ] Document pros, cons, use cases
 - **Outcome**: Optional dynamic weighting with documented behavior
 - **Blocked by**: None
 - **Feeds into**: F (if useful for output quality)
+- **Implementation notes (2026-04-10)**:
+  - Current implementation scopes dynamic adjustment to `DistRule` and bases schedule progress on each rule's own assigned rule weight.
+  - Supported schedule curves are `linear` and `ease_in`; configuration is passed through `global_dist_dynamic_adjustment_schedule` when building default global-distribution WFC settings.
+  - Remaining work is empirical: verify spatial-bias behavior with seeded starts and benchmark quality/runtime impact before considering the mode complete.
 
 ### C.2 Local Distribution Contribution Rules
 - **Status**: Not started

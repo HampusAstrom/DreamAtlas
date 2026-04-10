@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Optional
 
 from .rule_management import BanRule, RuleManager
 from .wave_function_collapse import make_wfc_settings_from_global_dist
@@ -51,9 +52,11 @@ def make_default_rule_managers(base_global_target_dist: dict) -> list[RuleManage
     ]
 
 
-def make_default_wfc_settings() -> dict:
+def make_default_wfc_settings(global_dist_dynamic_adjustment_schedule: Optional[dict] = None) -> dict:
     settings = {
         'base_global_target_dist': deepcopy(DEFAULT_GLOBAL_TARGET_DIST),
         'rule_managers': make_default_rule_managers(DEFAULT_GLOBAL_TARGET_DIST),
     }
+    if global_dist_dynamic_adjustment_schedule is not None:
+        settings['global_dist_dynamic_adjustment_schedule'] = deepcopy(global_dist_dynamic_adjustment_schedule)
     return make_wfc_settings_from_global_dist(settings)

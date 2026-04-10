@@ -307,7 +307,7 @@ Compare to existing Rule patterns for consistency.
 5. Report back: what was delivered, test results, any blockers discovered
 
 When you need human input (e.g., "API design decision"), pause and ask.
-Propose commit message when ready."
+Propose commit message when ready.
 ```
 
 **When to use this**: Daily development cadence, when you want to focus on building without managing agents manually

@@ -533,6 +533,125 @@ class TestDistRuleBehavior(unittest.TestCase):
         self.assertAlmostEqual(rule.adjusting_province_dist['water'], 0.5, places=8)
         self.assertAlmostEqual(sum(rule.adjusting_province_dist.values()), 0.75, places=8)
 
+    def test_dist_rule_dynamic_schedule_uses_kind_progress(self):
+        """Dynamic schedules should react to mismatch relative to remaining correctable weight."""
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=1.0,
+            flag='all',
+            dynamic_adjustment_schedule={
+                'curve': 'linear',
+                'start_multiplier': 0.5,
+                'end_multiplier': 1.5,
+            },
+            name='global_rule',
+        )
+
+        rule.setup(self.graph)
+
+        origin = Element.from_node("A", self.graph)
+        origin['flags'] = {'all': 1.0}
+        origin['terrain'] = 'forest'
+        rule.update_statistics_for_origin(self.graph, origin)
+
+        self.assertAlmostEqual(rule.adjusting_province_dist['forest'], 0.0, places=8)
+        self.assertAlmostEqual(rule.adjusting_province_dist['water'], 0.75, places=8)
+
+    def test_dist_rule_dynamic_schedule_does_not_change_zero_gap_target(self):
+        """Dynamic scheduling should not perturb terrains already on target."""
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=1.0,
+            flag='all',
+            dynamic_adjustment_schedule={
+                'curve': 'linear',
+                'start_multiplier': 0.5,
+                'end_multiplier': 1.5,
+            },
+            name='global_rule',
+        )
+
+        rule.setup(self.graph)
+        rule.assigned_rule_province_weight = 1.999999999999
+
+        multiplier = rule._get_dynamic_adjustment_multiplier('province', gap=0.0)
+
+        self.assertAlmostEqual(multiplier, 1.0, places=8)
+
+    def test_dist_rule_dynamic_schedule_tolerates_tiny_weight_overshoot(self):
+        """Rule-local progress should clamp tiny floating-point overshoots instead of failing."""
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=1.0,
+            flag='all',
+            dynamic_adjustment_schedule={
+                'curve': 'linear',
+                'start_multiplier': 0.5,
+                'end_multiplier': 1.5,
+            },
+            name='global_rule',
+        )
+
+        rule.total_rule_province_weight = 1.0
+        rule.assigned_rule_province_weight = 1.0 + 1e-12
+
+        multiplier = rule._get_dynamic_adjustment_multiplier('province', gap=0.25)
+
+        self.assertAlmostEqual(multiplier, 1.5, places=8)
+
+    def test_dist_rule_dynamic_schedule_validation_rejects_invalid_curve(self):
+        """Unsupported dynamic schedule curves should fail fast."""
+        with self.assertRaises(ValueError):
+            DistRule(
+                adjusting_province_dist={'forest': 1.0},
+                adjusting_border_dist={'normal': 1.0},
+                dynamic_adjustment_schedule={
+                    'curve': 'sigmoid',
+                    'start_multiplier': 0.25,
+                    'end_multiplier': 1.0,
+                },
+                name='global_rule',
+            )
+
+    def test_dist_rule_dynamic_schedule_validation_rejects_missing_required_keys(self):
+        """Dynamic schedules should not invent implied defaults for required keys."""
+        with self.assertRaises(ValueError):
+            DistRule(
+                adjusting_province_dist={'forest': 1.0},
+                adjusting_border_dist={'normal': 1.0},
+                dynamic_adjustment_schedule={'curve': 'linear'},
+                name='global_rule',
+            )
+
+    def test_dist_rule_dynamic_schedule_validation_rejects_invalid_range(self):
+        """Dynamic schedules should keep suppression <= 1.0 and boost >= 1.0."""
+        with self.assertRaises(ValueError):
+            DistRule(
+                adjusting_province_dist={'forest': 1.0},
+                adjusting_border_dist={'normal': 1.0},
+                dynamic_adjustment_schedule={
+                    'curve': 'linear',
+                    'start_multiplier': 1.1,
+                    'end_multiplier': 1.5,
+                },
+                name='global_rule',
+            )
+
+        with self.assertRaises(ValueError):
+            DistRule(
+                adjusting_province_dist={'forest': 1.0},
+                adjusting_border_dist={'normal': 1.0},
+                dynamic_adjustment_schedule={
+                    'curve': 'linear',
+                    'start_multiplier': 0.5,
+                    'end_multiplier': 0.9,
+                },
+                name='global_rule',
+            )
+
     def test_joint_probability_uses_multiplicative_factors(self):
         """Joint probabilities should be proportional to product of per-rule factors."""
         graph = TerrainGraph(settings={})
@@ -758,6 +877,36 @@ class TestWaveFunctionCollapseIntegration(unittest.TestCase):
                     f"Sea province adjacent to river border: {edge_id} "
                     f"({u}={u_terrain}, {v}={v_terrain}, border={edge_terrain})"
                 )
+
+    def test_make_wfc_settings_passes_dynamic_schedule_to_global_rule(self):
+        """Factory should wire the optional dynamic schedule into the generated global DistRule."""
+        settings = {
+            'base_global_target_dist': {
+                'province_terrains': {'sea': 0.5, 'forest': 0.5},
+                'border_terrains': {'river': 0.5, 'normal': 0.5},
+            },
+            'global_dist_dynamic_adjustment_schedule': {
+                'curve': 'ease_in',
+                'start_multiplier': 0.1,
+                'end_multiplier': 1.0,
+                'exponent': 3.0,
+            },
+        }
+
+        wfc_settings = make_wfc_settings_from_global_dist(settings)
+        global_manager = wfc_settings['rule_managers'][-1]
+        global_rule = global_manager.rules[0]
+
+        self.assertIsInstance(global_rule, DistRule)
+        self.assertEqual(
+            global_rule.dynamic_adjustment_schedule,
+            {
+                'curve': 'ease_in',
+                'start_multiplier': 0.1,
+                'end_multiplier': 1.0,
+                'exponent': 3.0,
+            }
+        )
 
     def test_wfc_all_elements_set_on_completion(self):
         """
@@ -1380,6 +1529,27 @@ class TestRulesLibrary(unittest.TestCase):
         self.assertIn('base_terrain_domain', settings)
         self.assertIn('province_terrains', settings['base_terrain_domain'])
         self.assertIn('border_terrains', settings['base_terrain_domain'])
+
+    def test_default_wfc_settings_can_forward_dynamic_schedule_to_global_rule(self):
+        settings = make_default_wfc_settings(
+            global_dist_dynamic_adjustment_schedule={
+                'curve': 'linear',
+                'start_multiplier': 0.7,
+                'end_multiplier': 1.3,
+            }
+        )
+
+        global_manager = next(manager for manager in settings['rule_managers'] if manager.name == 'global_dist')
+        global_rule = global_manager.rules[0]
+
+        self.assertEqual(
+            global_rule.dynamic_adjustment_schedule,
+            {
+                'curve': 'linear',
+                'start_multiplier': 0.7,
+                'end_multiplier': 1.3,
+            }
+        )
 
 
 if __name__ == '__main__':
