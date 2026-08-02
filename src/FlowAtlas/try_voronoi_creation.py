@@ -29,14 +29,14 @@ def p2p_dist(point1, point2):
         dy = 1 - dy
     return np.sqrt(dx**2 + dy**2)
 
-def spread_points(points):
-    lloyd = LloydRelaxation(points)
+def spread_points(points, **kwargs):
+    lloyd = LloydRelaxation(points, **kwargs)
     for _ in range(5):
         lloyd.relax()
     points = lloyd.get_points()
     return np.array(points)
 
-def voronoi_and_graph(points: np.ndarray) -> tuple[nx.Graph, Voronoi]:
+def voronoi_and_graph(points: np.ndarray, toroidal=False) -> tuple[nx.Graph, Voronoi]:
     """
     Convert a point set into a Voronoi diagram and its dual graph (Delaunay triangulation).
 
@@ -53,14 +53,18 @@ def voronoi_and_graph(points: np.ndarray) -> tuple[nx.Graph, Voronoi]:
     """
 
     # Create both Voronoi and Delaunay objects
-    vor = Voronoi(points)
+    original_points = points
+    if toroidal:
+        vor, points = LloydRelaxation.get_unit_periodic_voronoi(original_points)
+    else:
+        vor = Voronoi(points)
     tri = Delaunay(points)
 
     # Create graph with original points as nodes
     G = nx.Graph()
 
     # Add nodes with their coordinates
-    for i, point in enumerate(points):
+    for i, point in enumerate(original_points):
         G.add_node(tuple(point))
 
     # Add edges from Delaunay triangulation (dual of Voronoi)
@@ -71,10 +75,19 @@ def voronoi_and_graph(points: np.ndarray) -> tuple[nx.Graph, Voronoi]:
             for j in range(i + 1, len(simplex)):
                 p1 = tuple(points[simplex[i]])
                 p2 = tuple(points[simplex[j]])
+                if not G.has_node(p1) and not G.has_node(p2):
+                    continue # both points are toroidal duplicates, skip
+                if toroidal:
+                    pass
+                    # convert each point to it's origin
+                    p1 = LloydRelaxation.get_origin_point(p1, points)
+                    p2 = LloydRelaxation.get_origin_point(p2, points)
                 if G.has_edge(p1, p2):
                     continue  # Edge already exists
-                distance = np.linalg.norm(np.array(p1) - np.array(p2))
+                #distance = np.linalg.norm(np.array(p1) - np.array(p2))
+                distance = np.linalg.norm(LloydRelaxation.unit_toroidal_delta(np.array(p1), np.array(p2)))
                 G.add_edge(p1, p2, weight=distance)
+    # TODO make pruned vor diagram?
 
     return G, vor
 
@@ -91,7 +104,7 @@ def main():
     # TODO see if we can change Voronoi/Lloyd to use full map field, ie
     # handle possibly adding vertices on the outside of the outermost points,
     # and handle distance calculations with looping in mind
-    points = spread_points(points)
+    points = spread_points(points, toroidal=True)
     axs[1].scatter(points[:, 0], points[:, 1], c='b', marker='.')
 
     fig, ax = plt.subplots(figsize=(1920/dpi, 1080/dpi), dpi=dpi)
