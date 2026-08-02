@@ -533,6 +533,83 @@ class TestDistRuleBehavior(unittest.TestCase):
         self.assertAlmostEqual(rule.adjusting_province_dist['water'], 0.5, places=8)
         self.assertAlmostEqual(sum(rule.adjusting_province_dist.values()), 0.75, places=8)
 
+    def test_dist_rule_trace_records_gap_adjustment_and_output_terms(self):
+        """Trace history should capture the per-terrain terms used during recompute."""
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=1.0,
+            flag='all',
+            trace_adjustments=True,
+            name='global_rule',
+        )
+
+        rule.setup(self.graph)
+
+        origin = Element.from_node("A", self.graph)
+        origin['terrain'] = 'forest'
+        rule.update_statistics_for_origin(self.graph, origin)
+
+        history = rule.get_adjusting_dist_history('province')
+        self.assertEqual(len(history), 1)
+
+        trace_entry = history[0]
+        forest_terms = trace_entry['terrains']['forest']
+        water_terms = trace_entry['terrains']['water']
+
+        self.assertEqual(trace_entry['assigned_total'], 1)
+        self.assertEqual(trace_entry['total_elements'], 2.0)
+        self.assertAlmostEqual(forest_terms['target_count'], 1.0, places=8)
+        self.assertAlmostEqual(forest_terms['gap'], 0.0, places=8)
+        self.assertAlmostEqual(forest_terms['adjustment_part'], 0.0, places=8)
+        self.assertAlmostEqual(forest_terms['adjusted_factor'], 0.0, places=8)
+        self.assertAlmostEqual(water_terms['target_count'], 1.0, places=8)
+        self.assertAlmostEqual(water_terms['gap'], 1.0, places=8)
+        self.assertAlmostEqual(water_terms['adjustment_part'], 0.5, places=8)
+        self.assertAlmostEqual(water_terms['adjusted_factor'], 0.5, places=8)
+
+    def test_dist_rule_trace_shows_low_and_high_assignment_pressure(self):
+        """Trace history should show how gaps evolve when assigned counts stay below and then exceed target."""
+        graph = TerrainGraph(settings={})
+        node_names = [f"P{i}" for i in range(10)]
+        for node_name in node_names:
+            graph.add_node(node_name)
+
+        rule = DistRule(
+            adjusting_province_dist={'forest': 0.5, 'water': 0.5},
+            adjusting_border_dist={'normal': 1.0},
+            adjusting_factor=1.0,
+            flag='all',
+            trace_adjustments=True,
+            name='global_rule',
+        )
+
+        rule.setup(graph)
+
+        for node_name in node_names[:8]:
+            origin = Element.from_node(node_name, graph)
+            origin['terrain'] = 'forest'
+            rule.update_statistics_for_origin(graph, origin)
+
+        history = rule.get_adjusting_dist_history('province')
+        self.assertEqual(len(history), 8)
+
+        first_trace = history[0]['terrains']['forest']
+        on_target_trace = history[4]['terrains']['forest']
+        overshoot_trace = history[7]['terrains']['forest']
+
+        self.assertAlmostEqual(first_trace['gap'], 4.0, places=8)
+        self.assertAlmostEqual(first_trace['adjustment_part'], 0.4, places=8)
+        self.assertAlmostEqual(first_trace['adjusted_factor'], 0.4, places=8)
+
+        self.assertAlmostEqual(on_target_trace['gap'], 0.0, places=8)
+        self.assertAlmostEqual(on_target_trace['adjustment_part'], 0.0, places=8)
+        self.assertAlmostEqual(on_target_trace['adjusted_factor'], 0.0, places=8)
+
+        self.assertAlmostEqual(overshoot_trace['gap'], -3.0, places=8)
+        self.assertAlmostEqual(overshoot_trace['adjustment_part'], -0.3, places=8)
+        self.assertAlmostEqual(overshoot_trace['adjusted_factor'], 0.0, places=8)
+
     def test_joint_probability_uses_multiplicative_factors(self):
         """Joint probabilities should be proportional to product of per-rule factors."""
         graph = TerrainGraph(settings={})

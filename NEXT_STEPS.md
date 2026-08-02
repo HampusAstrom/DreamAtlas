@@ -5,6 +5,8 @@
 
 ## Maintenance Notes
 
+- 2026-04-10: Added opt-in `DistRule` recompute tracing plus a standalone `try_adjusting_dist_behavior.py` validator to inspect `gap`, adjustment terms, and resulting factors over time while experimenting with dynamic weighting behavior.
+- 2026-04-10: `RuleManager.manager_weight` appears underused and may not match the intended user-facing control for scaling rule-set impact; revisit its semantics in a later pass before expanding rule-weight configuration.
 - 2026-03-30: B.1 implemented entropy-selection refactor for mixed element domains. Selection moved into `WaveFunctionCollapse` with fixed per-class normalization factors computed once at setup, using configurable `entropy_selection_mode` (`raw`, `normalized_domain_max`, `normalized_initial_mean`, `normalized_initial_median`). `try_wave_function_collapse.py` now defaults to `normalized_initial_mean`.
 - 2026-03-28: Hardened safe git hook launcher for cross-platform use by adding OS-specific hook commands and launcher scripts under `.github/hooks/`.
 - 2026-03-29: Simplified safe git hooks to a single direct Python entrypoint in `.github/hooks/00-safe-tool-permissions.json`; removed wrapper scripts to reduce VS Code hang risk and set hook infrastructure failures to fail-open in `.github/hooks/apply_safe_git_rules.py`.
@@ -26,13 +28,13 @@ Master TODO list for next major development phases of FlowAtlas. Organized by co
 - [Development Strategy](#development-strategy--sequencing)
 
 **Current High Prio**
-1. B.1
-2. C.1
+1. [x] B.1
+2. [ ] C.1
 
 **Next features**
-- C.2, C.4
-- C.3 and D
-- A
+- [ ] C.2, [ ] C.4
+- [ ] C.3 and [ ] D
+- [ ] A
 
 ---
 

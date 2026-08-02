@@ -212,6 +212,9 @@ class DistRule(Rule):
                  adjusting_border_dist: dict,
                  adjusting_factor: float = 1.0,
                  flag: str = 'all',
+                 trace_adjustments: bool = False,
+                 trace_print: bool = False,
+                 trace_logger: Optional[Callable[[dict], None]] = None,
                  # TODO consider if flags should be dict, so we can store distance weights there,
                  # or if we should just have a separate dict for distance weights in that case
                  name: Optional[str] = None):
@@ -223,6 +226,9 @@ class DistRule(Rule):
         self.target_border_dist = adjusting_border_dist.copy()
         self.adjusting_factor = adjusting_factor # 1.0 for guarranteed dist match, 0.0 for fixed dist selection
         self.flag = flag # defaults to all if not specified, meaning it applies to all elements
+        self.trace_adjustments = trace_adjustments
+        self.trace_print = trace_print
+        self.trace_logger = trace_logger
         self.name = name
         self.rule_key = name or f"{self.__class__.__name__}_{id(self)}"
 
@@ -232,6 +238,8 @@ class DistRule(Rule):
         self.total_rule_borders = 0.0
         self.assigned_province_attributes = Counter()
         self.assigned_border_attributes = Counter()
+        self.adjusting_dist_history: list[dict] = []
+        self._adjusting_dist_step = 0
 
         # TODO handle weight by distance for for cap "region" type stuff
         # weight: float = 1.0 # hmm, maybe just rely on RuleManager weight?
@@ -318,6 +326,7 @@ class DistRule(Rule):
             return
 
         adjusting_dist = {}
+        terrain_details = {}
         for terrain, target_component in target_dist.items():
             current_count = assigned_counts.get(terrain, 0)
             target_count = target_component * total_elements
@@ -326,6 +335,15 @@ class DistRule(Rule):
             target_part = (1.0 - self.adjusting_factor) * target_component
             adjusted_factor = max(0.0, adjustment_part + target_part)
             adjusting_dist[terrain] = adjusted_factor
+            terrain_details[terrain] = {
+                'target_component': target_component,
+                'current_count': current_count,
+                'target_count': target_count,
+                'gap': gap,
+                'adjustment_part': adjustment_part,
+                'target_part': target_part,
+                'adjusted_factor': adjusted_factor,
+            }
 
         # OBS There should be no normalizing here! The adjusting dist is meant to
         # be a set of factors that are applied to the base global target dist,
@@ -335,6 +353,72 @@ class DistRule(Rule):
         # Mutate in place so all elements holding this dict reference are updated immediately.
         live_dist.clear()
         live_dist.update(adjusting_dist)
+
+        self._record_adjusting_dist_trace(
+            element_kind=element_kind,
+            total_elements=total_elements,
+            assigned_counts=assigned_counts,
+            terrain_details=terrain_details,
+            live_dist=adjusting_dist,
+        )
+
+    def _record_adjusting_dist_trace(self,
+                                     element_kind: Literal['province', 'border'],
+                                     total_elements: float,
+                                     assigned_counts: Counter,
+                                     terrain_details: dict,
+                                     live_dist: dict):
+        if not (self.trace_adjustments or self.trace_print or self.trace_logger is not None):
+            return
+
+        self._adjusting_dist_step += 1
+        trace_entry = {
+            'step': self._adjusting_dist_step,
+            'rule_key': self.rule_key,
+            'element_kind': element_kind,
+            'total_elements': total_elements,
+            'assigned_total': sum(assigned_counts.values()),
+            'adjusting_factor': self.adjusting_factor,
+            'assigned_counts': dict(assigned_counts),
+            'terrains': terrain_details,
+            'live_dist': dict(live_dist),
+        }
+
+        if self.trace_adjustments:
+            self.adjusting_dist_history.append(trace_entry)
+
+        if self.trace_print:
+            print(self._format_adjusting_dist_trace_entry(trace_entry))
+
+        if self.trace_logger is not None:
+            self.trace_logger(trace_entry)
+
+    def _format_adjusting_dist_trace_entry(self, trace_entry: dict) -> str:
+        terrain_bits = []
+        for terrain, values in trace_entry['terrains'].items():
+            terrain_bits.append(
+                f"{terrain}: count={values['current_count']}, target={values['target_count']:.3f}, "
+                f"gap={values['gap']:.3f}, adj={values['adjustment_part']:.3f}, "
+                f"target_part={values['target_part']:.3f}, out={values['adjusted_factor']:.3f}"
+            )
+        joined_terrains = " | ".join(terrain_bits)
+        return (
+            f"[{self.rule_key}] step={trace_entry['step']} kind={trace_entry['element_kind']} "
+            f"assigned={trace_entry['assigned_total']}/{trace_entry['total_elements']}: {joined_terrains}"
+        )
+
+    def clear_adjusting_dist_history(self):
+        self.adjusting_dist_history.clear()
+        self._adjusting_dist_step = 0
+
+    def get_adjusting_dist_history(self,
+                                   element_kind: Optional[Literal['province', 'border']] = None) -> list[dict]:
+        if element_kind is None:
+            return list(self.adjusting_dist_history)
+        return [
+            entry for entry in self.adjusting_dist_history
+            if entry['element_kind'] == element_kind
+        ]
 
     def update_affected(self,
                         affected_element: Element,
